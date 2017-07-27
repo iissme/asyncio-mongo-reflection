@@ -6,3 +6,5 @@ venv
 /asyncio_mongo_reflection.egg-info/
 /build/
 /dist/
+/.eggs/
+.coverage*
