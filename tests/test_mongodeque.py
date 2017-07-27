@@ -1,20 +1,10 @@
 from copy import deepcopy
 from json import dumps, loads
 
-import motor.motor_asyncio
-import pytest
 from asyncio_mongo_reflection.mongodeque import *
+from tests.test_asyncio_prepare import *
 
 test_data = []
-
-loop = asyncio.new_event_loop()
-loop.set_debug(True)
-asyncio.set_event_loop(loop)
-
-run = lambda coro: loop.run_until_complete(coro)
-
-client = motor.motor_asyncio.AsyncIOMotorClient()
-db = client.test_db
 
 run(db['test_arr_int'].remove())
 run(db['test_arr_str'].remove())
@@ -56,7 +46,7 @@ def db_compare(m, o):
     run(mongo_compare(flattern_nested(list(o), dumps=m._dumps, to_deque=False), m.col, m.obj_ref, m.key))
 
 
-def flattern_nested(nlist, dumps=False, to_deque=True):
+def flattern_nested(nlist, dumps=None, to_deque=True):
     fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
 
     for ix, el in enumerate(nlist):
@@ -70,24 +60,6 @@ def flattern_nested(nlist, dumps=False, to_deque=True):
             nlist[ix] = fdumps(el)
 
     return nlist
-
-
-@pytest.yield_fixture(scope='session', autouse=True)
-def db_conn():
-    global mongo_int
-    global mongo_str
-    global mongo_obj
-
-    yield 1
-    # clear remaining tasks
-    del mongo_int
-    del mongo_str
-    del mongo_obj
-    pending = asyncio.Task.all_tasks()
-    for task in pending:
-        task.cancel()
-    run(asyncio.sleep(2))
-    loop.close()
 
 
 @pytest.fixture(scope="function",

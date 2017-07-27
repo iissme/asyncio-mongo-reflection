@@ -1,18 +1,7 @@
-import asyncio
-
-import motor.motor_asyncio
-import pytest
 from asyncio_mongo_reflection.mongodict import *
+from tests.test_asyncio_prepare import *
 
 test_data = []
-
-loop = asyncio.new_event_loop()
-loop.set_debug(False)
-asyncio.set_event_loop(loop)
-run = lambda coro: loop.run_until_complete(coro)
-
-client = motor.motor_asyncio.AsyncIOMotorClient()
-db = client.test_db
 
 run(db['test_dict'].remove())
 
@@ -33,31 +22,26 @@ async def mongo_compare(ex, col_name):
     assert obj == ex
 
 
+def flattern_nested(dct, dumps=None):
+    fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
+
+    for key, val in dct.items():
+        if isinstance(val, MongoDictReflection) or isinstance(val, dict):
+            dct[key] = flattern_nested(dict(val), dumps)
+        else:
+            dct[key] = fdumps(val)
+    return dct
+
+
 def db_compare(m, o):
-    if m._dumps:
-        o = {key: m._dumps(val) for key, val in o.items()}
-    run(mongo_compare(o, m.col.name))
-
-
-@pytest.yield_fixture(scope='session', autouse=True)
-def db_conn():
-    global mongo_dict
-    yield 1
-    # clear remaining tasks
-    del mongo_dict
-
-    pending = asyncio.Task.all_tasks()
-    for task in pending:
-        task.cancel()
-    run(asyncio.sleep(1))
-    loop.close()
+    run(mongo_compare(flattern_nested(dict(o), m._dumps), m.col.name))
 
 
 @pytest.fixture(scope="function",
                 params=[mongo_dict],
                 ids=['dict'])
 def _(request):
-    return request.param, dict(request.param)
+    return request.param, flattern_nested(dict(request.param))
 
 
 def test_create(_):
@@ -129,7 +113,6 @@ def test_set_nested(_):
     o['g'].update(h=3)
 
     run(m.mongo_pending.join())
-    run(m['g'].mongo_pending.join())
     assert m == o
     db_compare(m, o)
 
@@ -150,8 +133,6 @@ def test_more_nested(_):
     o['g']['j'].popitem()
 
     run(m.mongo_pending.join())
-    run(m['g'].mongo_pending.join())
-    run(m['g']['j'].mongo_pending.join())
     assert m == o
     db_compare(m, o)
 
@@ -167,6 +148,18 @@ def test_del(_):
     run(m.mongo_pending.join())
     assert m == o
     db_compare(m, o)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def test_shutdown():
+    yield None
+    # in session yield fixture loop stops too early so do this in test
+    pending = asyncio.Task.all_tasks()
+    for task in pending:
+        task.cancel()
+
+    run(asyncio.sleep(1))
+    loop.close()
 
 '''
 def test_clear(_):
