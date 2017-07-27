@@ -152,20 +152,17 @@ class MongoDictReflection(MongoDict):
 
     @staticmethod
     async def _proc_loaded(self, dct):
-        try:
-            for key, val in dct.items():
-                if isinstance(val, dict):
-                    nested = await self.cls._create_nested(self, key, val)
-                    if hasattr(self, '_parent'):
-                        self[key] = nested
-                        await self._proc_loaded(self[key], val)
-                    else:
-                        dct[key] = nested
-                        await self._proc_loaded(dct[key], val)
+        for key, val in dct.items():
+            if isinstance(val, dict):
+                nested = await self.cls._create_nested(self, key, val)
+                if hasattr(self, '_parent'):
+                    self[key] = nested
+                    await self._proc_loaded(self[key], val)
                 else:
-                    dct[key] = self._loads(val)
-        except Exception as e:
-            pass
+                    dct[key] = nested
+                    await self._proc_loaded(dct[key], val)
+            else:
+                dct[key] = self._loads(val)
         return dct
 
     async def _mongo_clear(self):
