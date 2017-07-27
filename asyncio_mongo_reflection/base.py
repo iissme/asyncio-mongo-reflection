@@ -1,6 +1,7 @@
 import asyncio
 import weakref
 import functools
+from time import clock
 
 from pymongo.collection import UpdateResult
 
@@ -21,18 +22,23 @@ class AsyncCoroQueueDispatcher:
     @functools.total_ordering
     class Task:
 
-        def __init__(self, coro, priority):
+        def __init__(self, coro, priority, locals, clock):
             self.coro = coro
             self.priority = priority
+            self.locals = locals
+            self._insertion_clock = clock
 
         def __lt__(self, other):
-            return self.priority < other.priority
+            if self == other:
+                return self._insertion_clock < other._insertion_clock
+            else:
+                return self.priority < other.priority
 
         def __eq__(self, other):
             return self.priority == other.priority
 
         def __repr__(self):
-            return f'Coro - {repr(self.coro)} Priority - {self.priority}'
+            return f'Coro - {repr(self.coro)} Priority - {self.priority} Locals - {self.locals}'
 
     def __init__(self, loop=None, external_cb=None):
         self.loop = loop if loop else asyncio._get_running_loop()
@@ -84,7 +90,11 @@ class AsyncCoroQueueDispatcher:
 
             try:
                 res = future.result()
+
+                if self.results_queue.full():
+                    self.results_queue.get_nowait()
                 asyncio.ensure_future(self.results_queue.put(res), loop=self.loop)
+
                 if external_cb:
                     external_cb(res, None)
             except Exception as e:
@@ -95,7 +105,10 @@ class AsyncCoroQueueDispatcher:
 
         f = asyncio.Future()
         f.add_done_callback(task_cb)
-        self.tasks_queue.put_nowait(self.Task(future_wrapper(coro, f), priority))
+
+        coro_locals = {key: repr(val) for key, val in coro.cr_frame.f_locals.items()}
+        self.tasks_queue.put_nowait(self.Task(future_wrapper(coro, f), priority,
+                                              coro_locals, clock()))
 
 
 class _SyncObjBase:
@@ -142,7 +155,8 @@ class _SyncObjBase:
             self._enqueue_coro = dispatcher.enqueue_coro
             self.last_mongo_op_results = dispatcher.results_queue
             self.mongo_pending = dispatcher.tasks_queue
-            self._mongo_consumer_task = self.loop.create_task(dispatcher.create())
+            self._mongo_dispatcher_task = self.loop.create_task(dispatcher.create())
+            self._finalizer = weakref.finalize(self, self._cancel_dispatcher)
         else:
             self._tree_depth = self._parent._tree_depth + 1
 
@@ -169,6 +183,6 @@ class _SyncObjBase:
 
         return self
 
-    def __del__(self):
-        if not hasattr(self, '_parent'):
-            self._mongo_consumer_task.cancel()
+    def _cancel_dispatcher(self):
+        if not hasattr(self, '_parent') and not self.loop.is_closed():
+            self._mongo_dispatcher_task.cancel()
