@@ -149,18 +149,6 @@ def test_del(_):
     assert m == o
     db_compare(m, o)
 
-
-@pytest.fixture(scope="module", autouse=True)
-def test_shutdown():
-    yield None
-    # in session yield fixture loop stops too early so do this in test
-    pending = asyncio.Task.all_tasks()
-    for task in pending:
-        task.cancel()
-
-    run(asyncio.sleep(1))
-    loop.close()
-
 '''
 def test_clear(_):
     m, o = _[0], _[1]

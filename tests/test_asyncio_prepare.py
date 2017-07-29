@@ -18,7 +18,7 @@ db = client.test_db
 @pytest.fixture(scope="session", autouse=True)
 def test_shutdown():
     yield None
-    # in session yield fixture loop stops too early so do this in test
+    # clear all tasks before loop stops
     pending = asyncio.Task.all_tasks()
     for task in pending:
         task.cancel()
