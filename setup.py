@@ -3,12 +3,14 @@ import asyncio_mongo_reflection as lib
 import re
 import os
 
+root = os.path.dirname(os.path.abspath(__file__))
+
 requirements = []
-with open('requirements.txt') as f:
+with open(os.path.join(root, 'requirements.txt')) as f:
     requirements = f.read().splitlines()
 
 readme = ''
-with open('README.md') as f:
+with open(os.path.join(root, 'README.md')) as f:
     readme = f.read()
 
 setup(name=lib.__title__,

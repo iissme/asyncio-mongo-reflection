@@ -1,5 +1,8 @@
 # asyncio-mongo-reflection
-Python 3.6
+[![Build Status](https://travis-ci.org/isanich/asyncio-mongo-reflection.svg?branch=master)](https://travis-ci.org/isanich/asyncio-mongo-reflection)
+[![Coverage Status](https://coveralls.io/repos/github/isanich/asyncio-mongo-reflection/badge.svg?branch=master)](https://coveralls.io/github/isanich/asyncio-mongo-reflection)
+
+Python 3.6+
 
 asyncio-mongo-reflection writes each change on python's deque(list) or dict to [mongodb][mongodb_link] objects asynchronously in background using asyncio and [motor][motor_link] mongodb driver.
 
