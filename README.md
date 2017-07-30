@@ -10,7 +10,7 @@ asyncio-mongo-reflection writes each change on python's deque(list) or dict to [
 Library is in early stage of development so please be patient.
 * Reflections support nesting (i.e. dicts inside dicts or deques inside deques). Mixed nesting is work in progress.
 * You can choose where to store your reflections: in existing mongodb objects or create new ones.
-* For each operation on python object there is minimal equivalent for mongo. For example you want to insert something in deque that is nested deeply inside your reflection. This roughfly reflects to:
+* For each operation on python object there is a minimal equivalent for mongo. For example you want to insert something in deque that is nested deeply inside your reflection. This roughfly reflects to:
  ```{'$push': {'nested.nested.nested': {'$each': [your_val], '$position': insert_position'}}```
 
 ## Install
@@ -34,6 +34,8 @@ db = client.test_db
 # than there is no difference with python's deque (every mongo writing op will be done in background)
 
 async def create_reflection():
+    # first arg is optional, without it [] will be created
+    # or list will be loaded from mongo (if any by provided obj_ref/key)
     return await MongoDequeReflection.create([1, 2, [6, 7, 8]],
                                              col=db['example_reflection'],
                                              obj_ref={'array_id': 'example'},
@@ -43,6 +45,7 @@ mongo_reflection = loop.run_until_complete(create_reflection())
 
 mongo_reflection.append(9)
 mongo_reflection.popleft()
+# nested reflections are created immediately so you can perform operations on them
 mongo_reflection[1].extend(['a', 'b', [4, 5, 6]])
 mongo_reflection[1][-1].pop()
 
