@@ -10,7 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 
 
-class MongoDequeSimple(deque, ABC):
+class MongoDequeSimple(deque, ABC):  # pragma: no cover
     @classmethod
     async def create(cls, **kwargs):
         self = cls()
@@ -306,18 +306,14 @@ class MongoDequeReflection(MongoDeque):
         return await self._proc_loaded(self, mongo_arr)
 
     @staticmethod
-    async def _proc_loaded(self, arr):
+    async def _proc_loaded(inst, arr, parent_ix=None):
         for ix, el in enumerate(arr):
             if isinstance(el, list):
-                nested = await self.cls._create_nested(self, ix, el)
-                if hasattr(self, '_parent'):
-                    self[ix] = nested
-                    await self._proc_loaded(self[ix], el)
-                else:
-                    arr[ix] = nested
-                    await self._proc_loaded(arr[ix], el)
+                el = await inst._proc_loaded(inst, el, ix)
+                set_ix = f'{parent_ix}.{ix}' if parent_ix else ix
+                arr[ix] = await inst.cls._create_nested(inst, set_ix, el)
             else:
-                arr[ix] = self._loads(el)
+                arr[ix] = inst._loads(el)
         return arr
 
     async def _mongo_append(self, el):

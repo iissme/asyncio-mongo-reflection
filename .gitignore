@@ -7,4 +7,4 @@ venv
 /build/
 /dist/
 /.eggs/
-.coverage*
+.coverage

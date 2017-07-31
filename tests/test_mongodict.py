@@ -8,7 +8,7 @@ run(db['test_dict'].remove())
 col = db['test_dict']
 obj_ref = {'dict_id': 'test_dict'}
 dkey = 'test_dict.inner'
-mongo_dict = run(MongoDictReflection.create({'a': 1, 'b': 2, 'c': 3, 'd': {'e': 4}},
+mongo_dict = run(MongoDictReflection.create({'a': 1, 'b': {'g':{'t': 43}}, 'c': 3, 'd': {'e': 4}},
                                             col=col, obj_ref=obj_ref,
                                             key=dkey, dumps=None))
 
@@ -46,6 +46,10 @@ def _(request):
 
 def test_create(_):
     m, o = _[0], _[1]
+
+    with pytest.raises(TypeError):
+        MongoDictReflection()
+
     run(m.mongo_pending.join())
     assert m == o
     db_compare(m, o)
@@ -149,7 +153,26 @@ def test_del(_):
     assert m == o
     db_compare(m, o)
 
-'''
+
+def test_loaded(_):
+    m, o = _[0], _[1]
+
+    m_loaded = run(MongoDictReflection.create(col=m.col, obj_ref=m.obj_ref, key=m.key,
+                                              dumps=m._dumps, loads=m._loads))
+
+    def compare_nested(m, tested):
+        for key, val in tested.items():
+            if isinstance(val, MongoDictReflection):
+                compare_nested(m[key], val)
+
+            assert m[key] == val
+            assert m.key == tested.key
+
+    compare_nested(m, m_loaded)
+
+    assert m_loaded == o
+
+
 def test_clear(_):
     m, o = _[0], _[1]
 
@@ -159,4 +182,3 @@ def test_clear(_):
     run(asyncio.sleep(0.1))
     assert m == o
     db_compare(m, o)
-'''

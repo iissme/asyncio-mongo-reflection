@@ -151,18 +151,14 @@ class MongoDictReflection(MongoDict):
         return await self._proc_loaded(self, mongo_dict)
 
     @staticmethod
-    async def _proc_loaded(self, dct):
+    async def _proc_loaded(inst, dct, parent_key=None):
         for key, val in dct.items():
             if isinstance(val, dict):
-                nested = await self.cls._create_nested(self, key, val)
-                if hasattr(self, '_parent'):
-                    self[key] = nested
-                    await self._proc_loaded(self[key], val)
-                else:
-                    dct[key] = nested
-                    await self._proc_loaded(dct[key], val)
+                val = await inst._proc_loaded(inst, val, key)
+                set_key = f'{parent_key}.{key}' if parent_key else key
+                dct[key] = await inst.cls._create_nested(inst, set_key, val)
             else:
-                dct[key] = self._loads(val)
+                dct[key] = inst._loads(val)
         return dct
 
     async def _mongo_clear(self):

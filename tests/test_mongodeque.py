@@ -22,7 +22,7 @@ mongo_str = run(MongoDequeReflection.create([1, 2, 3, 4, 5],
                                             col=db['test_arr_str'],
                                             obj_ref={'array_id': 'test_deque'},
                                             key='inner.arr',
-                                            dumps=str, maxlen=MAX_LEN+1))
+                                            dumps=str, loads=int, maxlen=MAX_LEN+1))
 
 mongo_obj = run(MongoDequeReflection.create([{'a': 1}, {'b': 1}, {'c': 1}, {'d': 1}, {'e': 1}],
                                             col=db['test_arr_obj'],
@@ -71,6 +71,10 @@ def _(request):
 
 def test_create(_):
     m, o = _[0], _[1]
+
+    with pytest.raises(TypeError):
+        MongoDequeReflection()
+
     run(m.mongo_pending.join())
     assert m == o
     db_compare(m, o)
@@ -297,3 +301,23 @@ def test_rmul(_):
     run(m.mongo_pending.join())
     assert m == o
     db_compare(m, o)
+
+
+def test_loaded(_):
+    m, o = _[0], _[1]
+
+    m_loaded = run(MongoDequeReflection.create(col=m.col, obj_ref=m.obj_ref, key=m.key,
+                                               dumps=m._dumps, loads=m._loads, maxlen=m.maxlen))
+
+    def compare_nested(m, tested):
+        for ix, el in enumerate(tested):
+            if isinstance(el, MongoDequeReflection):
+                compare_nested(m[ix], el)
+
+            assert m[ix] == el
+            assert m.maxlen == tested.maxlen
+            assert m.key == tested.key
+
+    compare_nested(m, m_loaded)
+
+    assert m_loaded == o
