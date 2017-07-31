@@ -106,7 +106,7 @@ class MongoDict(dict, _SyncObjBase, ABC):
 class MongoDictReflection(MongoDict):
     @classmethod
     async def create(cls, d=None, self=None, *, dumps=None, loads=None, **kwargs):
-        self = cls() if not isinstance(self, MongoDictReflection) else self
+        self = cls.__new__(cls) if not isinstance(self, MongoDictReflection) else self
         if not hasattr(self, '_dumps'):
             self._dumps = lambda arg: dumps(arg) if callable(dumps) else arg
         if not hasattr(self, '_loads'):
@@ -129,7 +129,7 @@ class MongoDictReflection(MongoDict):
 
     @classmethod
     async def _create_nested(cls, parent, key, val):
-        self = cls()
+        self = cls.__new__(cls)
         self.__dict__ = parent.__dict__.copy()
         return await cls.create(val, self=self, key=f'{self.key}.{key}', _parent=proxy(parent))
 

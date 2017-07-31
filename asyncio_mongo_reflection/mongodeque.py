@@ -256,7 +256,7 @@ class MongoDeque(deque, _SyncObjBase, ABC):
 class MongoDequeReflection(MongoDeque):
     @classmethod
     async def create(cls, lst=list(), self=None, *, dumps=None, loads=None, **kwargs):
-        self = cls() if not isinstance(self, MongoDequeReflection) else self
+        self = cls.__new__(cls) if not isinstance(self, MongoDequeReflection) else self
         if not hasattr(self, '_dumps'):
             self._dumps = lambda arg: dumps(arg) if callable(dumps) else arg
         if not hasattr(self, '_loads'):
@@ -279,7 +279,7 @@ class MongoDequeReflection(MongoDeque):
 
     @classmethod
     async def _create_nested(cls, parent, ix, val):
-        self = cls()
+        self = cls.__new__(cls)
         self.__dict__ = parent.__dict__.copy()
         maxlen = getattr(val, 'maxlen', None)
         self.nested_ix = ix

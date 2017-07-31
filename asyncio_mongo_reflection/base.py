@@ -2,6 +2,7 @@ import asyncio
 import weakref
 import functools
 from time import clock
+from abc import ABCMeta
 
 from pymongo.collection import UpdateResult
 
@@ -39,6 +40,9 @@ class AsyncCoroQueueDispatcher:
 
         def __repr__(self):
             return f'Coro - {repr(self.coro)} Priority - {self.priority} Locals - {self.locals}'
+
+    __slots__ = ('loop', 'tasks_queue', 'results_queue',
+                 '_process_next', '_dispatcher_task', '_external_cb')
 
     def __init__(self, loop=None, external_cb=None):
         self.loop = loop if loop else asyncio._get_running_loop()
@@ -111,23 +115,17 @@ class AsyncCoroQueueDispatcher:
                                               coro_locals, clock()))
 
 
-class _SyncObjBase:
+class NoInstances(type):
+    def __call__(cls, *args, **kwargs):
+        raise TypeError('This class can not be instantiated directly!'
+                        ' Use \'create\' classmethod!')
 
-    def __new__(cls, *args, **kwargs):
-        if cls is _SyncObjBase:
-            raise TypeError("SyncObjBase class can not be instantiated!")
-        return object.__new__(cls, *args, **kwargs)
 
-    @staticmethod
-    def _dispatcher_cb(res, exc):
-        if exc:
-            raise MongoReflectionError(exc)
-        else:
-            if isinstance(res, UpdateResult):
-                info = f'\nMongo task done with: {res.raw_result}'
-            else:
-                info = '\nDispatcher task done!'
-            print(info)
+class ABCNoInstances(NoInstances, ABCMeta):
+    pass
+
+
+class _SyncObjBase(metaclass=ABCNoInstances):
 
     @classmethod
     async def create(cls, self, base, loop=None, **kwargs):
@@ -182,6 +180,17 @@ class _SyncObjBase:
                 await self._mongo_extend(base, maxlen=maxlen)
 
         return self
+
+    @staticmethod
+    def _dispatcher_cb(res, exc):
+        if exc:
+            raise MongoReflectionError(exc)
+        else:
+            if isinstance(res, UpdateResult):
+                info = f'\nMongo task done with: {res.raw_result}'
+            else:
+                info = '\nDispatcher task done!'
+            print(info)
 
     def _cancel_dispatcher(self):
         if not hasattr(self, '_parent') and not self.loop.is_closed():
