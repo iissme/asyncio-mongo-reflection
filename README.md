@@ -1,6 +1,6 @@
 # asyncio-mongo-reflection
 [![Build Status](https://travis-ci.org/isanich/asyncio-mongo-reflection.svg?branch=master)](https://travis-ci.org/isanich/asyncio-mongo-reflection)
-[![Coverage Status](https://coveralls.io/repos/github/isanich/asyncio-mongo-reflection/badge.svg?branch=master)](https://coveralls.io/github/isanich/asyncio-mongo-reflection)
+[![Coverage Status](https://coveralls.io/repos/github/isanich/asyncio-mongo-reflection/badge.svg?branch=master)](https://coveralls.io/github/isanich/asyncio-mongo-reflection?branch=master)
 
 Python 3.6+
 
