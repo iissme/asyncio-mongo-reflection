@@ -22,6 +22,7 @@ install:
   - tar xzf mongodb-linux-x86_64-${MONGODB}.tgz
   - ${PWD}/mongodb-linux-x86_64-${MONGODB}/bin/mongod --version
   - pip install tox
+  - pip install pymongo motor
   - pip install coveralls
   - virtualenv --version
   - easy_install --version

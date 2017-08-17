@@ -6,6 +6,9 @@ Reflects python's deque and dict objects to mongodb asynchronously in background
 :license: MIT, see LICENSE for more details.
 """
 
+from .mongodeque import MongoDequeReflection
+from .mongodict import MongoDictReflection
+
 __title__ = 'asyncio-mongo-reflection'
 __author__ = 'isanich'
 __license__ = 'MIT'
