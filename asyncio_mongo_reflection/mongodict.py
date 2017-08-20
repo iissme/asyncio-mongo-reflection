@@ -146,7 +146,7 @@ class MongoDictReflection(MongoDict):
                 break
 
         if not isinstance(mongo_dict, dict) or not mongo_dict:
-            return []
+            return {}
 
         return await self._proc_loaded(self, mongo_dict)
 

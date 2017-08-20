@@ -128,7 +128,7 @@ class ABCNoInstances(NoInstances, ABCMeta):
 class _SyncObjBase(metaclass=ABCNoInstances):
 
     @classmethod
-    async def create(cls, self, base, loop=None, **kwargs):
+    async def create(cls, self, new_base, loop=None, **kwargs):
         if cls == _SyncObjBase:
             raise TypeError('You can\'t create _SyncObjBase explicitly!')
 
@@ -159,25 +159,25 @@ class _SyncObjBase(metaclass=ABCNoInstances):
             self._tree_depth = self._parent._tree_depth + 1
 
         if isinstance(self, dict):
-            base = base if isinstance(base, dict) else {}
+            new_base = new_base if isinstance(new_base, dict) else {}
         else:
-            base = base if isinstance(base, list) else list()
+            new_base = new_base if isinstance(new_base, list) else list()
 
         cached_base = None
         if not hasattr(self, '_parent'):
             cached_base = await self._mongo_get()
-            if base and base != cached_base:
+            if new_base and new_base != cached_base:
                 cached_base = None
                 await self._mongo_clear()
 
-        super(self.cls, self).__init__(base or cached_base, **super_kwargs)
+        super(self.cls, self).__init__(new_base or cached_base, **super_kwargs)
 
-        if not cached_base and not hasattr(self, '_parent'):
-            base = await self._proc_pushed(self, base)
+        if new_base and not cached_base and not hasattr(self, '_parent'):
+            new_base = await self._proc_pushed(self, new_base)
             if isinstance(self, dict):
-                await self._mongo_update(base)
+                await self._mongo_update(new_base)
             else:
-                await self._mongo_extend(base, maxlen=maxlen)
+                await self._mongo_extend(new_base, maxlen=maxlen)
 
         return self
 
