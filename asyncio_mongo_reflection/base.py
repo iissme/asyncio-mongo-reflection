@@ -1,6 +1,8 @@
 import asyncio
 import weakref
 import functools
+from threading import Thread
+from concurrent.futures import Executor
 from time import clock
 from abc import ABCMeta
 
@@ -9,6 +11,31 @@ from pymongo.collection import UpdateResult
 
 class MongoReflectionError(Exception):
     pass
+
+
+class SyncCoroExecutor(Executor):
+    """
+    Allows to wait for a given coroutine execution synchronously from a main thread.
+    Replaces loop.run_until_complete.
+    """
+    def __init__(self):
+        self._loop = asyncio.new_event_loop()
+        self._thread = Thread(daemon=True,
+                              target=self._start_shadow_loop,
+                              name='sync corutine executor')
+        self._thread.start()
+
+    def _start_shadow_loop(self):
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+
+    def submit(self, coro):
+        return asyncio.run_coroutine_threadsafe(coro, self._loop)
+
+    def shutdown(self, wait=True):
+        self._loop.call_soon_threadsafe(self._loop.stop)
+        if wait:
+            self._thread.join()
 
 
 class AsyncCoroQueueDispatcher:
@@ -67,7 +94,7 @@ class AsyncCoroQueueDispatcher:
             self._dispatcher_task = self.loop.create_task(self._queue_consumer())
             await asyncio.Future()
         except asyncio.CancelledError:
-            # waits for remaining tasks when diispatcher's task is cancelled
+            # waits for remaining tasks when dispatcher's task is cancelled
             await self.tasks_queue.join()
             self._dispatcher_task.cancel()
 
@@ -126,6 +153,7 @@ class ABCNoInstances(NoInstances, ABCMeta):
 
 
 class _SyncObjBase(metaclass=ABCNoInstances):
+    sync_executor = SyncCoroExecutor()
 
     @classmethod
     async def create(cls, self, new_base, loop=None, **kwargs):
@@ -136,7 +164,6 @@ class _SyncObjBase(metaclass=ABCNoInstances):
         # get event loop from outside if loop is not provided
         # ('create' is a coro function so there must be one)
         self.loop = loop if loop else asyncio._get_running_loop()
-        self._run_now = lambda coro: self.loop.run_until_complete(coro)
 
         super_kwargs = {}
         maxlen = kwargs.pop('maxlen', None)
@@ -180,6 +207,10 @@ class _SyncObjBase(metaclass=ABCNoInstances):
                 await self._mongo_extend(new_base, maxlen=maxlen)
 
         return self
+
+    def _run_now(self, coro):
+        coro_future = self.sync_executor.submit(coro)
+        return coro_future.result()
 
     @staticmethod
     def _dispatcher_cb(res, exc):

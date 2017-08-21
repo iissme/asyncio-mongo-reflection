@@ -63,6 +63,21 @@ loop.run_until_complete(mongo_reflection.mongo_pending.join())
  "inner": {
      "arr": [2, [6, 7, 8, "a", "b", [4, 5]], 9]}}
 '''
+
+'''
+# also try this in aioconsole
+# type in terminal "pip install aioconsole" then "apython" and paste:
+
+from asyncio_mongo_reflection import MongoDequeReflection
+import motor.motor_asyncio
+client = motor.motor_asyncio.AsyncIOMotorClient()
+db = client.test_db
+ref = await MongoDequeReflection.create(col=db['example_reflection'],
+                                      obj_ref={'array_id': 'interacive_example'},
+                                      key='inner.arr', maxlen=10)
+
+# now you can try to modify ref and trace changes in any mongodb client
+'''
 ```
 
 ## Dependencies

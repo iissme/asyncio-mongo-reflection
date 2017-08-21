@@ -163,12 +163,15 @@ def test_popleft(_):
 def test_nested(_):
     m, o = _[0], _[1]
 
-    m[1] = [1, 2, 53]
-    m[1].appendleft(m[2])
-    m[1].append(m[3])
-    m[2] = deque([23, 41, 2])
-    m[2].append(m[1])
-    m[2][-1].append(777)
+    # make sure there's no 'loop already running' mistakes
+    async def inner_coro():
+        m[1] = [1, 2, 53]
+        m[1].appendleft(m[2])
+        m[1].append(m[3])
+        m[2] = deque([23, 41, 2])
+        m[2].append(m[1])
+        m[2][-1].append(777)
+    run(inner_coro())
 
     o[1] = deque([1, 2, 53])
     o[1].appendleft(o[2])
