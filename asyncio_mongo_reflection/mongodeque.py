@@ -330,7 +330,7 @@ class MongoDequeReflection(MongoDeque):
         mongo_slice = {'$slice': -maxlen} if maxlen else {}
         mongo_position = {'$position': position} if position is not None else {}
 
-        push_val = {'$each': [el for el in arr]}
+        push_val = {'$each': arr}
         push_val.update(mongo_slice)
         push_val.update(mongo_position)
 
