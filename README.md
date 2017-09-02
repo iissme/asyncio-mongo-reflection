@@ -14,10 +14,10 @@ Library is in early stage of development so please be patient.
  ```{'$push': {'nested.nested.nested': {'$each': [your_val], '$position': insert_position'}}```
 
 ## Install
-Work in progress.
+Only manual install via setup.py currently.
 
 ## Documentation
-Work in progress. Look at example below.
+Look at example below.
 
 ```python
 import asyncio

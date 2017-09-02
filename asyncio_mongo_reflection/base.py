@@ -1,12 +1,16 @@
 import asyncio
 import weakref
 import functools
+import logging
 from threading import Thread
 from concurrent.futures import Executor
 from time import clock
 from abc import ABCMeta
 
 from pymongo.collection import UpdateResult
+
+
+log = logging.getLogger(__name__)
 
 
 class MongoReflectionError(Exception):
@@ -221,7 +225,7 @@ class _SyncObjBase(metaclass=ABCNoInstances):
                 info = f'\nMongo task done with: {res.raw_result}'
             else:
                 info = '\nDispatcher task done!'
-            print(info)
+            log.debug(info)
 
     def _cancel_dispatcher(self):
         if not hasattr(self, '_parent') and not self.loop.is_closed():

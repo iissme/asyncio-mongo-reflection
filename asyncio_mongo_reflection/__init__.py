@@ -5,7 +5,7 @@ Reflects python's deque and dict objects to mongodb asynchronously in background
 :copyright: (c) 2017 isanich
 :license: MIT, see LICENSE for more details.
 """
-
+import logging
 from .mongodeque import MongoDequeReflection
 from .mongodict import MongoDictReflection
 
@@ -14,3 +14,12 @@ __author__ = 'isanich'
 __license__ = 'MIT'
 __copyright__ = 'Copyright 2017 isanich'
 __version__ = '0.0.1'
+
+try:
+    from logging import NullHandler
+except ImportError:
+    class NullHandler(logging.Handler):
+        def emit(self, record):
+            pass
+
+logging.getLogger(__name__).addHandler(NullHandler())
