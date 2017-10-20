@@ -15,11 +15,4 @@ __license__ = 'MIT'
 __copyright__ = 'Copyright 2017 isanich'
 __version__ = '0.0.1'
 
-try:
-    from logging import NullHandler
-except ImportError:
-    class NullHandler(logging.Handler):
-        def emit(self, record):
-            pass
-
-logging.getLogger(__name__).addHandler(NullHandler())
+logging.getLogger(__name__).addHandler(logging.NullHandler())
