@@ -1,9 +1,12 @@
 from setuptools import setup
-import asyncio_mongo_reflection as lib
 import re
 import os
 
 root = os.path.dirname(os.path.abspath(__file__))
+
+about = {}
+with open(os.path.join(root, 'asyncio_mongo_reflection', '__version__.py'), 'r') as f:
+    exec(f.read(), about)
 
 requirements = []
 with open(os.path.join(root, 'requirements.txt')) as f:
@@ -13,12 +16,12 @@ readme = ''
 with open(os.path.join(root, 'README.md')) as f:
     readme = f.read()
 
-setup(name=lib.__title__,
-      author=lib.__author__,
+setup(name=about['__title__'],
+      author=about['__author__'],
       author_email='ishlyakhov@gmail.com',
       url='http://github.com/isanich/asyncio-mongo-reflection',
-      version=lib.__version__,
-      license=lib.__license__,
+      version=about['__version__'],
+      license=about['__license__'],
       description='Reflects python\'s deque and dict objects to mongodb asynchronously in background.',
       long_description=readme,
       packages=['asyncio_mongo_reflection'],
