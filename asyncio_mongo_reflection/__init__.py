@@ -1,7 +1,7 @@
 """
 asyncio-mongo-reflection
 ~~~~~~~~~~~~~~~~~~~
-Reflects python's deque and dict objects to mongodb asynchronously in background.
+Reflects python's deque and dict objects in mongodb asynchronously in background.
 :copyright: (c) 2017 isanich
 :license: MIT, see LICENSE for more details.
 """

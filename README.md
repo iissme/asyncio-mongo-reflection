@@ -4,7 +4,7 @@
 
 Python 3.6+
 
-asyncio-mongo-reflection writes each change on python's deque(list) or dict to [mongodb][mongodb_link] objects asynchronously in background using asyncio and [motor][motor_link] mongodb driver.
+asyncio-mongo-reflection writes each change on python's deque(list) or dict in [mongodb][mongodb_link] objects asynchronously in background using asyncio and [motor][motor_link] mongodb driver.
 
 ## About
 Library is in early stage of development so please be patient.
