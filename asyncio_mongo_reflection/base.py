@@ -148,22 +148,6 @@ class AsyncCoroQueueDispatcher:
                                               coro_locals, clock()))
 
 
-def asyncinit(cls):
-    __new__ = cls.__new__
-
-    async def init(obj, *args, **kwargs):
-        await obj.__ainit__(*args, **kwargs)
-        return obj
-
-    def new(cls, *args, **kwargs):
-        obj = __new__(cls)
-        coro = init(obj, *args, **kwargs)
-        return coro
-
-    cls.__new__ = new
-    return cls
-
-
 class AsyncInit(type):
 
     @staticmethod
@@ -179,7 +163,9 @@ class AsyncInit(type):
 
     def __new__(mcs, name, bases, attrs, **kwargs):
 
-        if len(bases):
+        if '__new__' in attrs:
+            attrs['__cnew__'] = attrs['__new__']
+        elif len(bases):
             if hasattr(bases[0], '__cnew__'):
                 attrs['__cnew__'] = bases[0].__cnew__
             else:
