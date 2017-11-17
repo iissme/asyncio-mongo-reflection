@@ -3,14 +3,14 @@ from tests.test_asyncio_prepare import *
 
 test_data = []
 
-run(db['test_dict'].remove())
+lrun_uc(db['test_dict'].remove())
 
 col = db['test_dict']
 obj_ref = {'dict_id': 'test_dict'}
 dkey = 'test_dict.inner'
-mongo_dict = run(MongoDictReflection.create({'a': 1, 'b': {'g':{'t': 43}}, 'c': 3, 'd': {'e': 4}},
-                                            col=col, obj_ref=obj_ref,
-                                            key=dkey, dumps=None))
+mongo_dict = lrun_uc(MongoDictReflection.create({'a': 1, 'b': {'g':{'t': 43}}, 'c': 3, 'd': {'e': 4}},
+                                                col=col, obj_ref=obj_ref,
+                                                key=dkey, dumps=None))
 
 async def mongo_compare(ex, col_name):
     obj = await db[col_name].find_one(obj_ref)
@@ -33,8 +33,8 @@ def flattern_nested(dct, dumps=None):
     return dct
 
 
-def db_compare(m, o):
-    run(mongo_compare(flattern_nested(dict(o), m._dumps), m.col.name))
+async def db_compare(m, o):
+    await mongo_compare(flattern_nested(dict(o), m._dumps), m.col.name)
 
 
 @pytest.fixture(scope="function",
@@ -44,40 +44,44 @@ def _(request):
     return request.param, flattern_nested(dict(request.param))
 
 
-def test_create(_):
+@async_test
+async def test_create(_):
     m, o = _[0], _[1]
 
     with pytest.raises(TypeError):
         MongoDictReflection()
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_pop(_):
+@async_test
+async def test_pop(_):
     m, o = _[0], _[1]
 
     m.pop('a')
     o.pop('a')
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_popitem(_):
+@async_test
+async def test_popitem(_):
     m, o = _[0], _[1]
 
     m.popitem()
     o.popitem()
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_update(_):
+@async_test
+async def test_update(_):
     m, o = _[0], _[1]
 
     m.update({'e': 3}, i=3, ww=2)
@@ -88,12 +92,13 @@ def test_update(_):
     o.update({'g': 3})
     o.update([('f', 4), ('j', 6)])
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_set(_):
+@async_test
+async def test_set(_):
     m, o = _[0], _[1]
 
     m['g'] = 66
@@ -102,12 +107,13 @@ def test_set(_):
     o['g'] = 66
     o['i'] = 's'
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_set_nested(_):
+@async_test
+async def test_set_nested(_):
     m, o = _[0], _[1]
 
     m['g'] = {'f': 5}
@@ -116,12 +122,13 @@ def test_set_nested(_):
     o['g'] = {'f': 5}
     o['g'].update(h=3)
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_more_nested(_):
+@async_test
+async def test_more_nested(_):
     m, o = _[0], _[1]
 
     m['g']['j'] = {'i': 5}
@@ -136,12 +143,13 @@ def test_more_nested(_):
     o['g']['j'].update(st=43, d=34)
     o['g']['j'].popitem()
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_del(_):
+@async_test
+async def test_del(_):
     m, o = _[0], _[1]
 
     del m['g']
@@ -149,16 +157,17 @@ def test_del(_):
     del o['g']
     del o['i']
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_loaded(_):
+@async_test
+async def test_loaded(_):
     m, o = _[0], _[1]
 
-    m_loaded = run(MongoDictReflection.create(col=m.col, obj_ref=m.obj_ref, key=m.key,
-                                              dumps=m._dumps, loads=m._loads))
+    m_loaded = await MongoDictReflection.create(col=m.col, obj_ref=m.obj_ref, key=m.key,
+                                                dumps=m._dumps, loads=m._loads)
 
     def compare_nested(m, tested):
         for key, val in tested.items():
@@ -173,12 +182,13 @@ def test_loaded(_):
     assert m_loaded == o
 
 
-def test_clear(_):
+@async_test
+async def test_clear(_):
     m, o = _[0], _[1]
 
     m.clear()
     o.clear()
 
-    run(asyncio.sleep(0.1))
+    await asyncio.sleep(0.1)
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)

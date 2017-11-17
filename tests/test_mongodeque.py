@@ -6,30 +6,31 @@ from tests.test_asyncio_prepare import *
 
 test_data = []
 
-run(db['test_arr_int'].remove())
-run(db['test_arr_str'].remove())
-run(db['test_arr_obj'].remove())
+lrun_uc(db['test_arr_int'].remove())
+lrun_uc(db['test_arr_str'].remove())
+lrun_uc(db['test_arr_obj'].remove())
 
 MAX_LEN = 7
 
-mongo_int = run(MongoDequeReflection.create([0, 4, 3, 33, 5, deque([1, 2, 3], maxlen=5), 2, 53, 4, 5],
-                                            col=db['test_arr_int'],
-                                            obj_ref={'array_id': 'test_deque'},
-                                            key='inner.arr',
-                                            dumps=None, maxlen=MAX_LEN))
 
-mongo_str = run(MongoDequeReflection.create([1, 2, 3, 4, 5],
-                                            col=db['test_arr_str'],
-                                            obj_ref={'array_id': 'test_deque'},
-                                            key='inner.arr',
-                                            dumps=str, loads=int, maxlen=MAX_LEN+1))
+mongo_int = lrun_uc(MongoDequeReflection.create([0, 4, 3, 33, 5, deque([1, 2, 3], maxlen=5), 2, 53, 4, 5],
+                                                col=db['test_arr_int'],
+                                                obj_ref={'array_id': 'test_deque'},
+                                                key='inner.arr',
+                                                dumps=None, maxlen=MAX_LEN))
 
-mongo_obj = run(MongoDequeReflection.create([{'a': 1}, {'b': 1}, {'c': 1}, {'d': 1}, {'e': 1}],
-                                            col=db['test_arr_obj'],
-                                            obj_ref={'array_id': 'test_deque'},
-                                            key='inner.arr',
-                                            dumps=dumps,
-                                            loads=loads, maxlen=MAX_LEN+2))
+mongo_str = lrun_uc(MongoDequeReflection.create([1, 2, 3, 4, 5],
+                                                col=db['test_arr_str'],
+                                                obj_ref={'array_id': 'test_deque'},
+                                                key='inner.arr',
+                                                dumps=str, loads=int, maxlen=MAX_LEN+1))
+
+mongo_obj = lrun_uc(MongoDequeReflection.create([{'a': 1}, {'b': 1}, {'c': 1}, {'d': 1}, {'e': 1}],
+                                                col=db['test_arr_obj'],
+                                                obj_ref={'array_id': 'test_deque'},
+                                                key='inner.arr',
+                                                dumps=dumps,
+                                                loads=loads, maxlen=MAX_LEN+2))
 
 
 async def mongo_compare(ex, col, obj_ref, akey):
@@ -42,8 +43,9 @@ async def mongo_compare(ex, col, obj_ref, akey):
     assert obj == ex
 
 
-def db_compare(m, o):
-    run(mongo_compare(flattern_nested(list(o), dumps=m._dumps, to_deque=False), m.col, m.obj_ref, m.key))
+async def db_compare(m, o):
+    await mongo_compare(flattern_nested(list(o), dumps=m._dumps, to_deque=False),
+                        m.col, m.obj_ref, m.key)
 
 
 def flattern_nested(nlist, dumps=None, to_deque=True):
@@ -69,62 +71,68 @@ def _(request):
     return request.param, flattern_nested(deque(list(request.param), maxlen=request.param.maxlen))
 
 
-def test_create(_):
+@async_test
+async def test_create(_):
     m, o = _[0], _[1]
 
     with pytest.raises(TypeError):
         MongoDequeReflection()
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_append(_):
+@async_test
+async def test_append(_):
     m, o = _[0], _[1]
 
     m.append(m[-1])
     o.append(o[-1])
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_appendleft(_):
+@async_test
+async def test_appendleft(_):
     m, o = _[0], _[1]
 
     m.appendleft(m[-1])
     o.appendleft(o[-1])
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_extend(_):
+@async_test
+async def test_extend(_):
     m, o = _[0], _[1]
 
     m.extend([m[0], m[-2]])
     o.extend([o[0], o[-2]])
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_extendleft(_):
+@async_test
+async def test_extendleft(_):
     m, o = _[0], _[1]
 
     m.extendleft([m[0], m[-2]])
     o.extendleft([o[0], o[-2]])
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_insert(_):
+@async_test
+async def test_insert(_):
     m, o = _[0], _[1]
 
     try:
@@ -133,37 +141,40 @@ def test_insert(_):
     except IndexError:
         pass
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_pop(_):
+@async_test
+async def test_pop(_):
     m, o = _[0], _[1]
 
     m.pop()
     o.pop()
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_popleft(_):
+@async_test
+async def test_popleft(_):
     m, o = _[0], _[1]
 
     m.popleft()
     o.popleft()
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_nested(_):
+@async_test
+async def test_nested(_):
     m, o = _[0], _[1]
 
-    # make sure there's no 'loop already running' mistakes
+    # make sure there's no 'loop already lrun_ucning' mistakes
     async def inner_coro():
         m[1] = [1, 2, 53]
         m[1].appendleft(m[2])
@@ -171,7 +182,7 @@ def test_nested(_):
         m[2] = deque([23, 41, 2])
         m[2].append(m[1])
         m[2][-1].append(777)
-    run(inner_coro())
+    await inner_coro()
 
     o[1] = deque([1, 2, 53])
     o[1].appendleft(o[2])
@@ -180,137 +191,149 @@ def test_nested(_):
     o[2].append(deepcopy(o[1]))
     o[2][-1].append(777)
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_remove(_):
+@async_test
+async def test_remove(_):
     m, o = _[0], _[1]
 
     m.remove(m[1])
     o.remove(o[1])
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_reverse(_):
+@async_test
+async def test_reverse(_):
     m, o = _[0], _[1]
 
     m.reverse()
     o.reverse()
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_rotate(_):
+@async_test
+async def test_rotate(_):
     m, o = _[0], _[1]
 
     m.rotate(2)
     o.rotate(2)
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_rotate_neg(_):
+@async_test
+async def test_rotate_neg(_):
     m, o = _[0], _[1]
 
     m.rotate(-2)
     o.rotate(-2)
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_setitem(_):
+@async_test
+async def test_setitem(_):
     m, o = _[0], _[1]
 
     m[0] = m[-1]
     o[0] = o[-1]
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_delitem(_):
+@async_test
+async def test_delitem(_):
     m, o = _[0], _[1]
 
     del m[0]
     del o[0]
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_add(_):
+@async_test
+async def test_add(_):
     m, o = _[0], _[1]
 
     m = m + m
     o = o + o
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_iadd(_):
+@async_test
+async def test_iadd(_):
     m, o = _[0], _[1]
 
     m += m
     o += o
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_imul(_):
+@async_test
+async def test_imul(_):
     m, o = _[0], _[1]
 
     m *= 3
     o *= 3
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_mul(_):
+@async_test
+async def test_mul(_):
     m, o = _[0], _[1]
 
     m = m * 3
     o = o * 3
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_rmul(_):
+@async_test
+async def test_rmul(_):
     m, o = _[0], _[1]
 
     m = 3 * m
     o = 3 * o
 
-    run(m.mongo_pending.join())
+    await m.mongo_pending.join()
     assert m == o
-    db_compare(m, o)
+    await db_compare(m, o)
 
 
-def test_loaded(_):
+@async_test
+async def test_loaded(_):
     m, o = _[0], _[1]
 
-    m_loaded = run(MongoDequeReflection.create(col=m.col, obj_ref=m.obj_ref, key=m.key,
-                                               dumps=m._dumps, loads=m._loads, maxlen=m.maxlen))
+    m_loaded = await MongoDequeReflection.create(col=m.col, obj_ref=m.obj_ref, key=m.key,
+                                               dumps=m._dumps, loads=m._loads, maxlen=m.maxlen)
 
     def compare_nested(m, tested):
         for ix, el in enumerate(tested):
