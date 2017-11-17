@@ -54,6 +54,8 @@ class AsyncCoroQueueDispatcher:
     @functools.total_ordering
     class Task:
 
+        __slots__ = ('coro', 'priority', 'locals', '_insertion_clock')
+
         def __init__(self, coro, priority, locals, clock):
             self.coro = coro
             self.priority = priority
@@ -146,25 +148,63 @@ class AsyncCoroQueueDispatcher:
                                               coro_locals, clock()))
 
 
-class NoInstances(type):
+def asyncinit(cls):
+    __new__ = cls.__new__
+
+    async def init(obj, *args, **kwargs):
+        await obj.__ainit__(*args, **kwargs)
+        return obj
+
+    def new(cls, *args, **kwargs):
+        obj = __new__(cls)
+        coro = init(obj, *args, **kwargs)
+        return coro
+
+    cls.__new__ = new
+    return cls
+
+
+class AsyncInit(type):
+
+    @staticmethod
+    async def init(obj, *args, **kwargs):
+        await obj.__ainit__(*args, **kwargs)
+        return obj
+
+    @classmethod
+    def new(mcs, cls, *args, **kwargs):
+        obj = cls.__cnew__(cls)
+        coro = mcs.init(obj, *args, **kwargs)
+        return coro
+
+    def __new__(mcs, name, bases, attrs, **kwargs):
+
+        if len(bases):
+            if hasattr(bases[0], '__cnew__'):
+                attrs['__cnew__'] = bases[0].__cnew__
+            else:
+                attrs['__cnew__'] = bases[0].__new__
+        else:
+            attrs['__cnew__'] = object.__new__
+
+        attrs['__new__'] = mcs.new
+        return super().__new__(mcs, name, bases, attrs)
+
+    def __init__(cls, name, bases, attrs, **kwargs):
+        return super().__init__(name, bases, attrs)
+
     def __call__(cls, *args, **kwargs):
-        raise TypeError('This class can not be instantiated directly!'
-                        ' Use \'create\' classmethod!')
+        return super().__call__(*args, **kwargs)
 
 
-class ABCNoInstances(NoInstances, ABCMeta):
+class ABCAsyncInit(AsyncInit, ABCMeta):
     pass
 
 
-class _SyncObjBase(metaclass=ABCNoInstances):
+class _SyncObjBase(metaclass=ABCAsyncInit):
     sync_executor = SyncCoroExecutor()
 
-    @classmethod
-    async def create(cls, self, new_base, loop=None, **kwargs):
-        if cls == _SyncObjBase:
-            raise TypeError('You can\'t create _SyncObjBase explicitly!')
-
-        self.cls = cls
+    async def __ainit__(self, new_base, loop=None, **kwargs):
         # get event loop from outside if loop is not provided
         # ('create' is a coro function so there must be one)
         self.loop = loop if loop else asyncio._get_running_loop()
@@ -197,11 +237,11 @@ class _SyncObjBase(metaclass=ABCNoInstances):
         cached_base = None
         if not hasattr(self, '_parent'):
             cached_base = await self._mongo_get()
-            if new_base and new_base != cached_base:
+            if new_base and new_base != cached_base and getattr(self, 'rewrite', True):
                 cached_base = None
                 await self._mongo_clear()
 
-        super(self.cls, self).__init__(new_base or cached_base, **super_kwargs)
+        super(type(self), self).__init__(new_base or cached_base, **super_kwargs)
 
         if new_base and not cached_base and not hasattr(self, '_parent'):
             new_base = await self._proc_pushed(self, new_base)
@@ -209,8 +249,6 @@ class _SyncObjBase(metaclass=ABCNoInstances):
                 await self._mongo_update(new_base)
             else:
                 await self._mongo_extend(new_base, maxlen=maxlen)
-
-        return self
 
     def _run_now(self, coro):
         coro_future = self.sync_executor.submit(coro)

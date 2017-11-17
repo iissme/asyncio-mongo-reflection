@@ -36,10 +36,8 @@ db = client.test_db
 async def create_reflection():
     # first arg is optional, without it [] will be created
     # or list will be loaded from mongo (if any by provided obj_ref/key)
-    return await MongoDequeReflection.create([1, 2, [6, 7, 8]],
-                                             col=db['example_reflection'],
-                                             obj_ref={'array_id': 'example'},
-                                             key='inner.arr')
+    return await MongoDequeReflection.([1, 2, [6, 7, 8]], col=db['example_reflection'],
+                                        obj_ref={'array_id': 'example'}, key='inner.arr')
 
 mongo_reflection = loop.run_until_complete(create_reflection())
 
@@ -72,9 +70,9 @@ from asyncio_mongo_reflection import MongoDequeReflection
 import motor.motor_asyncio
 client = motor.motor_asyncio.AsyncIOMotorClient()
 db = client.test_db
-ref = await MongoDequeReflection.create(col=db['example_reflection'],
-                                      obj_ref={'array_id': 'interacive_example'},
-                                      key='inner.arr', maxlen=10)
+ref = await MongoDequeReflection.(col=db['example_reflection'],
+                                  obj_ref={'array_id': 'interacive_example'},
+                                  key='inner.arr', maxlen=10)
 
 # now you can try to modify ref and trace changes in any mongodb client
 '''

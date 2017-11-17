@@ -13,24 +13,24 @@ lrun_uc(db['test_arr_obj'].remove())
 MAX_LEN = 7
 
 
-mongo_int = lrun_uc(MongoDequeReflection.create([0, 4, 3, 33, 5, deque([1, 2, 3], maxlen=5), 2, 53, 4, 5],
-                                                col=db['test_arr_int'],
-                                                obj_ref={'array_id': 'test_deque'},
-                                                key='inner.arr',
-                                                dumps=None, maxlen=MAX_LEN))
+mongo_int = lrun_uc(MongoDequeReflection([0, 4, 3, 33, 5, deque([1, 2, 3], maxlen=5), 2, 53, 4, 5],
+                                         col=db['test_arr_int'],
+                                         obj_ref={'array_id': 'test_deque'},
+                                         key='inner.arr',
+                                         dumps=None, maxlen=MAX_LEN))
 
-mongo_str = lrun_uc(MongoDequeReflection.create([1, 2, 3, 4, 5],
-                                                col=db['test_arr_str'],
-                                                obj_ref={'array_id': 'test_deque'},
-                                                key='inner.arr',
-                                                dumps=str, loads=int, maxlen=MAX_LEN+1))
+mongo_str = lrun_uc(MongoDequeReflection([1, 2, 3, 4, 5],
+                                         col=db['test_arr_str'],
+                                         obj_ref={'array_id': 'test_deque'},
+                                         key='inner.arr',
+                                         dumps=str, loads=int, maxlen=MAX_LEN+1))
 
-mongo_obj = lrun_uc(MongoDequeReflection.create([{'a': 1}, {'b': 1}, {'c': 1}, {'d': 1}, {'e': 1}],
-                                                col=db['test_arr_obj'],
-                                                obj_ref={'array_id': 'test_deque'},
-                                                key='inner.arr',
-                                                dumps=dumps,
-                                                loads=loads, maxlen=MAX_LEN+2))
+mongo_obj = lrun_uc(MongoDequeReflection([{'a': 1}, {'b': 1}, {'c': 1}, {'d': 1}, {'e': 1}],
+                                         col=db['test_arr_obj'],
+                                         obj_ref={'array_id': 'test_deque'},
+                                         key='inner.arr',
+                                         dumps=dumps,
+                                         loads=loads, maxlen=MAX_LEN+2))
 
 
 async def mongo_compare(ex, col, obj_ref, akey):
@@ -69,18 +69,6 @@ def flattern_nested(nlist, dumps=None, to_deque=True):
                 ids=['int', 'str', 'obj'])
 def _(request):
     return request.param, flattern_nested(deque(list(request.param), maxlen=request.param.maxlen))
-
-
-@async_test
-async def test_create(_):
-    m, o = _[0], _[1]
-
-    with pytest.raises(TypeError):
-        MongoDequeReflection()
-
-    await m.mongo_pending.join()
-    assert m == o
-    await db_compare(m, o)
 
 
 @async_test
@@ -332,8 +320,8 @@ async def test_rmul(_):
 async def test_loaded(_):
     m, o = _[0], _[1]
 
-    m_loaded = await MongoDequeReflection.create(col=m.col, obj_ref=m.obj_ref, key=m.key,
-                                               dumps=m._dumps, loads=m._loads, maxlen=m.maxlen)
+    m_loaded = await MongoDequeReflection(col=m.col, obj_ref=m.obj_ref, key=m.key,
+                                          dumps=m._dumps, loads=m._loads, maxlen=m.maxlen)
 
     def compare_nested(m, tested):
         for ix, el in enumerate(tested):

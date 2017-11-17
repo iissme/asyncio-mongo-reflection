@@ -14,7 +14,6 @@ class MongoDequeSimple(deque, ABC):  # pragma: no cover
     @classmethod
     async def create(cls, **kwargs):
         self = cls()
-        self.cls = cls
         self.loop = asyncio.get_event_loop()
         self._run_coro = lambda coro: self.loop.create_task(coro)
 
@@ -80,7 +79,7 @@ class MongoDequeSimple(deque, ABC):  # pragma: no cover
         return res
 
 
-class MongoDeque(deque, _SyncObjBase, ABC):
+class MongoDeque(deque, _SyncObjBase):
 
     @abstractmethod
     async def _mongo_get(self):
@@ -211,7 +210,7 @@ class MongoDeque(deque, _SyncObjBase, ABC):
                         nestify = False
                     else:
                         nestify = gl_nestify
-                        rec_self = self[ix] = await self.cls._create_nested(self, ix, el)
+                        rec_self = self[ix] = await self._create_nested(self, ix, el)
                 else:
                     rec_self = self
                 el = await self._proc_pushed(rec_self, list(el), dumpify=dumpify, nestify=nestify)
@@ -254,9 +253,9 @@ class MongoDeque(deque, _SyncObjBase, ABC):
 
 
 class MongoDequeReflection(MongoDeque):
-    @classmethod
-    async def create(cls, lst=list(), self=None, *, dumps=None, loads=None, **kwargs):
-        self = cls.__new__(cls) if not isinstance(self, MongoDequeReflection) else self
+
+    async def __ainit__(self, lst=list(), *, dumps=None, loads=None, **kwargs):
+
         if not hasattr(self, '_dumps'):
             self._dumps = lambda arg: dumps(arg) if callable(dumps) else arg
         if not hasattr(self, '_loads'):
@@ -274,17 +273,16 @@ class MongoDequeReflection(MongoDeque):
         elif not isinstance(self.col, AsyncIOMotorCollection):
             raise TypeError('"col" argument must be a AsyncIOMotorCollection instance!')
 
-        await super().create(self, lst, **kwargs)
-        return self
+        await super().__ainit__(lst, **kwargs)
 
     @classmethod
     async def _create_nested(cls, parent, ix, val):
-        self = cls.__new__(cls)
+        self = cls.__cnew__(cls)
         self.__dict__ = parent.__dict__.copy()
         maxlen = getattr(val, 'maxlen', None)
         self.nested_ix = ix
-        return await cls.create(list(val), self=self, key=f'{self.key}.{ix}',
-                                maxlen=maxlen, _parent=proxy(parent))
+        return await cls.init(self, list(val), key=f'{self.key}.{ix}',
+                              maxlen=maxlen, _parent=proxy(parent))
 
     async def _mongo_get(self):
         mongo_arr = await self.col.find_one(self.obj_ref, projection={self.key: 1})
@@ -311,7 +309,7 @@ class MongoDequeReflection(MongoDeque):
             if isinstance(el, list):
                 el = await inst._proc_loaded(inst, el, ix)
                 set_ix = f'{parent_ix}.{ix}' if parent_ix else ix
-                arr[ix] = await inst.cls._create_nested(inst, set_ix, el)
+                arr[ix] = await inst._create_nested(inst, set_ix, el)
             else:
                 arr[ix] = inst._loads(el)
         return arr

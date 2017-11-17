@@ -8,9 +8,9 @@ lrun_uc(db['test_dict'].remove())
 col = db['test_dict']
 obj_ref = {'dict_id': 'test_dict'}
 dkey = 'test_dict.inner'
-mongo_dict = lrun_uc(MongoDictReflection.create({'a': 1, 'b': {'g':{'t': 43}}, 'c': 3, 'd': {'e': 4}},
-                                                col=col, obj_ref=obj_ref,
-                                                key=dkey, dumps=None))
+mongo_dict = lrun_uc(MongoDictReflection({'a': 1, 'b': {'g':{'t': 43}}, 'c': 3, 'd': {'e': 4}},
+                                         col=col, obj_ref=obj_ref,
+                                         key=dkey, dumps=None))
 
 async def mongo_compare(ex, col_name):
     obj = await db[col_name].find_one(obj_ref)
@@ -42,18 +42,6 @@ async def db_compare(m, o):
                 ids=['dict'])
 def _(request):
     return request.param, flattern_nested(dict(request.param))
-
-
-@async_test
-async def test_create(_):
-    m, o = _[0], _[1]
-
-    with pytest.raises(TypeError):
-        MongoDictReflection()
-
-    await m.mongo_pending.join()
-    assert m == o
-    await db_compare(m, o)
 
 
 @async_test
@@ -166,8 +154,8 @@ async def test_del(_):
 async def test_loaded(_):
     m, o = _[0], _[1]
 
-    m_loaded = await MongoDictReflection.create(col=m.col, obj_ref=m.obj_ref, key=m.key,
-                                                dumps=m._dumps, loads=m._loads)
+    m_loaded = await MongoDictReflection(col=m.col, obj_ref=m.obj_ref, key=m.key,
+                                         dumps=m._dumps, loads=m._loads)
 
     def compare_nested(m, tested):
         for key, val in tested.items():

@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 
 
-class MongoDict(dict, _SyncObjBase, ABC):
+class MongoDict(dict, _SyncObjBase):
     @abstractmethod
     async def _mongo_get(self):
         raise NotImplementedError
@@ -65,7 +65,7 @@ class MongoDict(dict, _SyncObjBase, ABC):
         to_mongo_dict = {}
         for key, val in pdict.items():
             if isinstance(val, dict) or isinstance(val, MongoDictReflection):
-                self[key] = rec_self = await self.cls._create_nested(self, key, dict(val))
+                self[key] = rec_self = await self._create_nested(self, key, dict(val))
                 val = await self._proc_pushed(rec_self, dict(val), True)
             else:
                 val = self._dumps(val)
@@ -104,9 +104,9 @@ class MongoDict(dict, _SyncObjBase, ABC):
 
 
 class MongoDictReflection(MongoDict):
-    @classmethod
-    async def create(cls, d=None, self=None, *, dumps=None, loads=None, **kwargs):
-        self = cls.__new__(cls) if not isinstance(self, MongoDictReflection) else self
+
+    async def __ainit__(self, d=None, *, dumps=None, loads=None, **kwargs):
+
         if not hasattr(self, '_dumps'):
             self._dumps = lambda arg: dumps(arg) if callable(dumps) else arg
         if not hasattr(self, '_loads'):
@@ -124,14 +124,13 @@ class MongoDictReflection(MongoDict):
         elif not isinstance(self.col, AsyncIOMotorCollection):
             raise TypeError('"col" argument must be a AsyncIOMotorCollection instance!')
 
-        await super().create(self, d, **kwargs)
-        return self
+        await super().__ainit__(d, **kwargs)
 
     @classmethod
     async def _create_nested(cls, parent, key, val):
-        self = cls.__new__(cls)
+        self = cls.__cnew__(cls)
         self.__dict__ = parent.__dict__.copy()
-        return await cls.create(val, self=self, key=f'{self.key}.{key}', _parent=proxy(parent))
+        return await cls.init(self, val, key=f'{self.key}.{key}', _parent=proxy(parent))
 
     async def _mongo_get(self):
         mongo_dict = await self.col.find_one(self.obj_ref, projection={self.key: 1})
@@ -156,7 +155,7 @@ class MongoDictReflection(MongoDict):
             if isinstance(val, dict):
                 val = await inst._proc_loaded(inst, val, key)
                 set_key = f'{parent_key}.{key}' if parent_key else key
-                dct[key] = await inst.cls._create_nested(inst, set_key, val)
+                dct[key] = await inst._create_nested(inst, set_key, val)
             else:
                 dct[key] = inst._loads(val)
         return dct
