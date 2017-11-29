@@ -192,7 +192,6 @@ class _SyncObjBase(metaclass=ABCAsyncInit):
 
     async def __ainit__(self, new_base, loop=None, **kwargs):
         # get event loop from outside if loop is not provided
-        # ('create' is a coro function so there must be one)
         self.loop = loop if loop else asyncio._get_running_loop()
 
         super_kwargs = {}
@@ -227,7 +226,8 @@ class _SyncObjBase(metaclass=ABCAsyncInit):
                 cached_base = None
                 await self._mongo_clear()
 
-        super(type(self), self).__init__(new_base or cached_base, **super_kwargs)
+        super(type(self), self).__init__(new_base if new_base and not cached_base else cached_base,
+                                         **super_kwargs)
 
         if new_base and not cached_base and not hasattr(self, '_parent'):
             new_base = await self._proc_pushed(self, new_base)
