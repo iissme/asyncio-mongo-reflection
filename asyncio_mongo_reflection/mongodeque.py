@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import random
 from abc import ABC, abstractmethod
-from collections import deque
+from collections import deque, Iterable
 from weakref import proxy
 
 from .base import _SyncObjBase, MongoReflectionError
@@ -198,8 +198,11 @@ class MongoDeque(deque, _SyncObjBase):
     @staticmethod
     async def _proc_pushed(self, arg, from_left=False, dumpify=True, nestify=True):
         gl_nestify = nestify
-
         push_arr = []
+
+        if not isinstance(arg, Iterable):
+            return arg
+
         for el in arg:
             if self._check_nested_type(el):
                 if nestify:
