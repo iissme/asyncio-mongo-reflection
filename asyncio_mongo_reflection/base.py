@@ -177,7 +177,7 @@ class AsyncInit(type):
         return super().__new__(mcs, name, bases, attrs)
 
     def __init__(cls, name, bases, attrs, **kwargs):
-        return super().__init__(name, bases, attrs)
+        super().__init__(name, bases, attrs)
 
     def __call__(cls, *args, **kwargs):
         return super().__call__(*args, **kwargs)
