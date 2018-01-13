@@ -1,47 +1,29 @@
-from asyncio_mongo_reflection.mongodict import *
 from tests.test_asyncio_prepare import *
-
-test_data = []
 
 lrun_uc(db['test_dict'].remove())
 
-col = db['test_dict']
-obj_ref = {'dict_id': 'test_dict'}
-dkey = 'test_dict.inner'
-mongo_dict = lrun_uc(MongoDictReflection({'a': 1, 'b': {'g':{'t': 43}}, 'c': 3, 'd': {'e': 4}},
-                                         col=col, obj_ref=obj_ref,
-                                         key=dkey, dumps=None))
-
-async def mongo_compare(ex, col_name):
-    obj = await db[col_name].find_one(obj_ref)
-
-    nested = dkey.split(sep='.')
-    for key in nested:
-        obj = obj[key]
-
-    assert obj == ex
-
-
-def flattern_nested(dct, dumps=None):
-    fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
-
-    for key, val in dct.items():
-        if isinstance(val, MongoDictReflection) or isinstance(val, dict):
-            dct[key] = flattern_nested(dict(val), dumps)
-        else:
-            dct[key] = fdumps(val)
-    return dct
+mongo_dict = lrun_uc(
+    MongoDictReflection(
+        {
+            'a': 1,
+            'b': {'g': {'t': 43}},
+            'c': 3,
+            'd': {'e': 4}
+        },
+        col=db['test_dict'], obj_ref={'dict_id': 'test_dict'},
+        key='test_dict.inner', dumps=None)
+)
 
 
 async def db_compare(m, o):
-    await mongo_compare(flattern_nested(dict(o), m._dumps), m.col.name)
+    await mongo_compare(flattern_dict_nested(dict(o), m._dumps), m)
 
 
 @pytest.fixture(scope="function",
                 params=[mongo_dict],
                 ids=['dict'])
 def _(request):
-    return request.param, flattern_nested(dict(request.param))
+    return request.param, flattern_dict_nested(dict(request.param), lists_to_deque=True)
 
 
 @async_test

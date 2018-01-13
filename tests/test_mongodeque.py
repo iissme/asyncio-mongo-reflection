@@ -1,10 +1,7 @@
 from copy import deepcopy
 from json import dumps, loads
 
-from asyncio_mongo_reflection.mongodeque import *
 from tests.test_asyncio_prepare import *
-
-test_data = []
 
 lrun_uc(db['test_arr_int'].remove())
 lrun_uc(db['test_arr_str'].remove())
@@ -33,42 +30,15 @@ mongo_obj = lrun_uc(MongoDequeReflection([{'a': 1}, {'b': 1}, {'c': 1}, {'d': 1}
                                          loads=loads, maxlen=MAX_LEN+2))
 
 
-async def mongo_compare(ex, col, obj_ref, akey):
-    obj = await col.find_one(obj_ref)
-
-    nested = akey.split(sep='.')
-    for key in nested:
-        obj = obj[key]
-
-    assert obj == ex
-
-
 async def db_compare(m, o):
-    await mongo_compare(flattern_nested(list(o), dumps=m._dumps, to_deque=False),
-                        m.col, m.obj_ref, m.key)
-
-
-def flattern_nested(nlist, dumps=None, to_deque=True):
-    fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
-
-    for ix, el in enumerate(nlist):
-        if isinstance(el, MongoDequeReflection) or isinstance(el, deque):
-            if to_deque:
-                nlist[ix] = deque(list(el), maxlen=el.maxlen)
-            else:
-                nlist[ix] = list(el)
-                flattern_nested(nlist[ix], dumps=dumps, to_deque=to_deque)
-        else:
-            nlist[ix] = fdumps(el)
-
-    return nlist
+    await mongo_compare(flattern_list_nested(list(o), dumps=m._dumps, lists_to_deque=False), m)
 
 
 @pytest.fixture(scope="function",
                 params=[mongo_int, mongo_str, mongo_obj],
                 ids=['int', 'str', 'obj'])
 def _(request):
-    return request.param, flattern_nested(deque(list(request.param), maxlen=request.param.maxlen))
+    return request.param, flattern_list_nested(deque(list(request.param), maxlen=request.param.maxlen))
 
 
 @async_test
@@ -162,7 +132,7 @@ async def test_popleft(_):
 async def test_nested(_):
     m, o = _[0], _[1]
 
-    # make sure there's no 'loop already lrun_ucning' mistakes
+    # make sure there's no 'loop already' mistakes
     async def inner_coro():
         m[1] = [1, 2, 53]
         m[1].appendleft(m[2])
@@ -323,15 +293,6 @@ async def test_loaded(_):
     m_loaded = await MongoDequeReflection(col=m.col, obj_ref=m.obj_ref, key=m.key,
                                           dumps=m._dumps, loads=m._loads, maxlen=m.maxlen)
 
-    def compare_nested(m, tested):
-        for ix, el in enumerate(tested):
-            if isinstance(el, MongoDequeReflection):
-                compare_nested(m[ix], el)
-
-            assert m[ix] == el
-            assert m.maxlen == tested.maxlen
-            assert m.key == tested.key
-
-    compare_nested(m, m_loaded)
+    compare_nested_list(m, m_loaded)
 
     assert m_loaded == o
