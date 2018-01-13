@@ -59,14 +59,34 @@ class MongoDict(dict, _SyncObjBase):
         self._enqueue_coro(self._mongo_delitem(key), self._tree_depth)
         super(MongoDict, self).__delitem__(key)
 
+    @classmethod
+    def _flattern(cls, dct, dumps=None):
+        fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
+
+        for key, val in dct.items():
+            if isinstance(val, MongoDictReflection) or isinstance(val, dict):
+                dct[key] = cls._flattern(dict(val), dumps)
+            elif MongoDequeReflection._check_nested_type(val):
+                dct[key] = MongoDequeReflection._flattern(val, dumps)
+            else:
+                dct[key] = fdumps(val)
+        return dct
+
+    @staticmethod
+    def _check_nested_type(val):
+        return isinstance(val, dict) or isinstance(val, MongoDictReflection)
+
     @staticmethod
     async def _proc_pushed(self, pdict, recursive_call=False):
 
         to_mongo_dict = {}
         for key, val in pdict.items():
-            if isinstance(val, dict) or isinstance(val, MongoDictReflection):
+            if MongoDequeReflection._check_nested_type(val):
+                self[key] = rec_self = await MongoDequeReflection._create_nested(self, key, list(val))
+                val = await rec_self._proc_pushed(rec_self, val)
+            elif self._check_nested_type(val):
                 self[key] = rec_self = await self._create_nested(self, key, dict(val))
-                val = await self._proc_pushed(rec_self, dict(val), True)
+                val = await self._proc_pushed(rec_self, dict(val), recursive_call=True)
             else:
                 val = self._dumps(val)
 
@@ -147,17 +167,21 @@ class MongoDictReflection(MongoDict):
         if not isinstance(mongo_dict, dict) or not mongo_dict:
             return {}
 
-        return await self._proc_loaded(self, mongo_dict)
+        return await self._proc_loaded(self, mongo_dict, self._loads)
 
-    @staticmethod
-    async def _proc_loaded(inst, dct, parent_key=None):
+    @classmethod
+    async def _proc_loaded(cls, parent, dct, loads, parent_key=None):
         for key, val in dct.items():
             if isinstance(val, dict):
-                val = await inst._proc_loaded(inst, val, key)
                 set_key = f'{parent_key}.{key}' if parent_key else key
-                dct[key] = await inst._create_nested(inst, set_key, val)
+                val = await cls._proc_loaded(parent, val, loads, set_key)
+                dct[key] = await cls._create_nested(parent, set_key, val)
+            elif isinstance(val, list):
+                set_key = f'{parent_key}.{key}' if parent_key else key
+                val = await MongoDequeReflection._proc_loaded(parent, val, loads, set_key)
+                dct[key] = await MongoDequeReflection._create_nested(parent, set_key, val)
             else:
-                dct[key] = inst._loads(val)
+                dct[key] = loads(val)
         return dct
 
     async def _mongo_clear(self):
@@ -177,3 +201,6 @@ class MongoDictReflection(MongoDict):
 
     async def _mongo_delitem(self, key):
         return await self._mongo_pop(key)
+
+
+from .mongodeque import MongoDequeReflection

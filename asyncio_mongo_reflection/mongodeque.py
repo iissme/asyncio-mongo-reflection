@@ -138,7 +138,7 @@ class MongoDeque(deque, _SyncObjBase):
         raise NotImplementedError
 
     def __add__(self, other):
-        other = self._run_now(self._proc_pushed(self, other, dumpify=False, nestify=False))
+        other = self._flattern(list(other))
         arr = list(other)
         self.extend(arr)
         return self
@@ -147,7 +147,7 @@ class MongoDeque(deque, _SyncObjBase):
         return self.__add__(other)
 
     def __mul__(self, num):
-        flat_self = self._run_now(self._proc_pushed(self, self, dumpify=False, nestify=False))
+        flat_self = self._flattern(list(self))
         arr = flat_self * (num - 1)
         self.extend(arr)
         return self
@@ -176,10 +176,25 @@ class MongoDeque(deque, _SyncObjBase):
                 value = [self._dumps(value)]
             self._enqueue_coro(self._mongo_setitem(key, value), self._tree_depth)
 
-    def __delitem__(self, key):
+    def __delitem__(self,  key):
         super(MongoDeque, self).__delitem__(key)
         self._move_nested_ixs(self)
         self._enqueue_coro(self._mongo_delitem(key), self._tree_depth)
+
+    @classmethod
+    def _flattern(cls, nlist, dumps=None):
+        fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
+
+        for ix, el in enumerate(nlist):
+            if isinstance(el, MongoDequeReflection) or isinstance(el, deque):
+                nlist[ix] = list(el)
+                cls._flattern(nlist[ix], dumps)
+            elif MongoDictReflection._check_nested_type(el):
+                nlist[ix] = MongoDictReflection._flattern(dict(el), dumps)
+            else:
+                nlist[ix] = fdumps(el)
+
+        return nlist
 
     @staticmethod
     def _check_nested_type(el):
@@ -195,31 +210,52 @@ class MongoDeque(deque, _SyncObjBase):
                     el.key = exp_key
                     self._move_nested_ixs(el)
 
+    def _find_el(self, el):
+        found_mod_at = []
+        found_flat_at = []
+        for ix, val in enumerate(self):
+            if val == el:
+                if isinstance(val, MongoDictReflection) or isinstance(val, MongoDequeReflection):
+                    found_mod_at.append(ix)
+                else:
+                    found_flat_at.append(ix)
+
+        if not found_flat_at and not found_mod_at:
+            raise ValueError
+
+        if not found_flat_at:
+            return found_mod_at[0]
+        else:
+            return found_flat_at[0]
+
     @staticmethod
-    async def _proc_pushed(self, arg, from_left=False, dumpify=True, nestify=True):
-        gl_nestify = nestify
+    async def _proc_pushed(self, arg, from_left=False):
         push_arr = []
 
         if not isinstance(arg, Iterable):
             return arg
 
         for el in arg:
-            if self._check_nested_type(el):
-                if nestify:
-                    try:
-                        ix = self.index(el)
-                    except ValueError:  # trimmed by maxlen
-                        rec_self = self
-                        nestify = False
-                    else:
-                        nestify = gl_nestify
-                        rec_self = self[ix] = await self._create_nested(self, ix, el)
+            if MongoDictReflection._check_nested_type(el):
+                try:
+                    ix = self._find_el(el)
+                except ValueError:  # trimmed by maxlen
+                    el = await MongoDictReflection._proc_pushed(self, dict(el), recursive_call=True)
                 else:
-                    rec_self = self
-                el = await self._proc_pushed(rec_self, list(el), dumpify=dumpify, nestify=nestify)
+                    self[ix] = await MongoDictReflection._create_nested(self, ix, el)
+                    el = await MongoDictReflection._proc_pushed(self[ix], dict(el), recursive_call=True)
+
+            elif self._check_nested_type(el):
+                try:
+                    ix = self._find_el(el)
+                except ValueError:
+                    el = await self._proc_pushed(self, list(el))
+                else:
+                    self[ix] = await self._create_nested(self, ix, el)
+                    el = await self._proc_pushed(self[ix], list(el))
+
             else:
-                if dumpify:
-                    el = self._dumps(el)
+                el = self._dumps(el)
 
             if from_left:
                 push_arr.insert(0, el)
@@ -304,17 +340,21 @@ class MongoDequeReflection(MongoDeque):
         if not isinstance(mongo_arr, list) or not mongo_arr:
             return []
 
-        return await self._proc_loaded(self, mongo_arr)
+        return await self._proc_loaded(self, mongo_arr, self._loads)
 
-    @staticmethod
-    async def _proc_loaded(inst, arr, parent_ix=None):
+    @classmethod
+    async def _proc_loaded(cls, parent, arr, loads, parent_ix=None):
         for ix, el in enumerate(arr):
             if isinstance(el, list):
-                el = await inst._proc_loaded(inst, el, ix)
                 set_ix = f'{parent_ix}.{ix}' if parent_ix else ix
-                arr[ix] = await inst._create_nested(inst, set_ix, el)
+                el = await cls._proc_loaded(parent, el, loads, set_ix)
+                arr[ix] = await cls._create_nested(parent, set_ix, el)
+            elif isinstance(el, dict):
+                set_ix = f'{parent_ix}.{ix}' if parent_ix else ix
+                el = await MongoDictReflection._proc_loaded(parent, el, loads, set_ix)
+                arr[ix] = await MongoDictReflection._create_nested(parent, set_ix, el)
             else:
-                arr[ix] = inst._loads(el)
+                arr[ix] = loads(el)
         return arr
 
     async def _mongo_append(self, el):
@@ -353,7 +393,11 @@ class MongoDequeReflection(MongoDeque):
 
     async def _mongo_remove(self, el):
         h = random.getrandbits(32)
-        el = await self._proc_pushed(self, el, nestify=False)
+
+        if self._check_nested_type(el):
+            el = self._flattern(list(el), self._dumps)
+        if MongoDictReflection._check_nested_type(el):
+            el = MongoDictReflection._flattern(dict(el), self._dumps)
 
         ref = self.obj_ref.copy()
         ref.update({f'{self.key}': el})
@@ -375,7 +419,7 @@ class MongoDequeReflection(MongoDeque):
         return await self.col.update_one(self.obj_ref, {'$set': {f'{self.key}': doc}})
 
     async def _mongo_rotate(self, num):
-        # haven't found any mongo eq. yet (could be replaced by full reflection update)
+        # haven't found any mongo eq. (could be replaced with full reflection update)
         def rotate(a, r=1):
             if len(a) == 0:
                 return a
@@ -401,3 +445,6 @@ class MongoDequeReflection(MongoDeque):
 
         await self.col.update_one(self.obj_ref, {'$set': {f'{self.key}.{ix}': h}})
         return await self.col.update_one(self.obj_ref, {'$pull': {f'{self.key}': h}})
+
+
+from .mongodict import MongoDictReflection

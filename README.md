@@ -4,17 +4,19 @@
 
 Python 3.6+
 
-asyncio-mongo-reflection writes each change on python's deque(list) or dict in [mongodb][mongodb_link] objects asynchronously in background using asyncio and [motor][motor_link] mongodb driver.
+asyncio-mongo-reflection writes each separate change of python's deque(list), dict or any their nested combination to [mongodb][mongodb_link] asynchronously in background using asyncio and [motor][motor_link] mongodb driver.
 
 ## About
-Library is in early stage of development so please be patient.
-* Reflections support nesting (i.e. dicts inside dicts or deques inside deques). Mixed nesting is work in progress.
+* Reflections support nesting (i.e. dicts inside dicts or deques inside deques). Mixed nesting is supported too (dicts inside deques for ex.)!
 * You can choose where to store your reflections: in existing mongodb objects or create new ones.
+* Existing reflections can be automatically recreated from db at thier last state (if 'rewrite=False' is set or no initial list/dict is passed).
 * For each operation on python object there is a minimal equivalent for mongo. For example you want to insert something in deque that is nested deeply inside your reflection. This roughfly reflects to:
- ```{'$push': {'nested.nested.nested': {'$each': [your_val], '$position': insert_position'}}```
+ `{'$push': {'nested.nested.nested': {'$each': [your_val], '$position': insert_position'}}`
 
 ## Install
-Only manual install via setup.py currently.
+Clone from git and install via setup.py.
+Or `pip install -U https://github.com/isanich/asyncio-mongo-reflection/archive/master.zip`.
+
 
 ## Documentation
 Look at example below.
@@ -30,14 +32,15 @@ asyncio.set_event_loop(loop)
 client = motor_asyncio.AsyncIOMotorClient()
 db = client.test_db
 
-# you should wait for the first reflection instance creation
+# you should 'await' while reflection instance is created
 # than there is no difference with python's deque (every mongo writing op will be done in background)
-
+# with 'rewrite=False' flag initial list '[1, 2, [6, 7, 8]]' will be ignored next time (data will be loaded from db).
 async def create_reflection():
-    # first arg is optional, without it [] will be created
-    # or list will be loaded from mongo (if any by provided obj_ref/key)
+    # first arg is optional, without it empty reflection will be created
+    # or list will be loaded from mongo (if any found using provided obj_ref/key)
     return await MongoDequeReflection.([1, 2, [6, 7, 8]], col=db['example_reflection'],
-                                        obj_ref={'array_id': 'example'}, key='inner.arr')
+                                        obj_ref={'array_id': 'example'}, key='inner.arr',
+                                        rewrite=False)
 
 mongo_reflection = loop.run_until_complete(create_reflection())
 
@@ -48,13 +51,13 @@ mongo_reflection[1].extend(['a', 'b', [4, 5, 6]])
 mongo_reflection[1][-1].pop()
 
 # with mongo_reflection.mongo_pending.join() you can wait synchronously
-# for mongo operations completion if needed
+# for mongo operation completion if needed
 loop.run_until_complete(mongo_reflection.mongo_pending.join())
 
 '''
 # mongo db object
 # note that 'obj_ref' could be ref to any existing mongo object
-# or new one will be created like below
+# or new one will be created like below:
 
 {"_id": {"$oid": "59761ba93e5bb7435c1f6c9b"},
  "array_id": "example",
@@ -74,6 +77,7 @@ ref = await MongoDequeReflection.(col=db['example_reflection'],
                                   obj_ref={'array_id': 'interacive_example'},
                                   key='inner.arr', maxlen=10)
 
+# empty reflection is created
 # now you can try to modify ref and trace changes in any mongodb client
 '''
 ```
