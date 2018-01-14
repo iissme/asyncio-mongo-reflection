@@ -48,8 +48,11 @@ class MongoDict(dict, _SyncObjBase):
         super(MongoDict, self).__setitem__(key, value)
 
         if not hasattr(value, '_parent') or self._instance_from_outside(value):
-            if isinstance(value, dict) or isinstance(value, MongoDictReflection):
+            if self._check_nested_type(value):
                 value = self._run_now(self._proc_pushed(self, {key: value}))
+            elif MongoDequeReflection._check_nested_type(value):
+                self[key] = self._run_now(MongoDequeReflection._create_nested(self, key, list(value)))
+                value = {f'{self.key}.{key}': self._run_now(MongoDequeReflection._proc_pushed(self[key], value))}
             else:
                 value = {f'{self.key}.{key}': self._dumps(value)}
 

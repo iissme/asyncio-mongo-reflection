@@ -76,11 +76,8 @@ def compare_nested_dict(m, tested):
         if isinstance(val, MongoDequeReflection):
             compare_nested_list(m[key], val)
 
-        try:
-            assert m[key] == val
-            assert m.key == tested.key
-        except Exception as e:
-            raise e
+        assert m[key] == val
+        assert m.key == tested.key
 
 
 def compare_nested_list(m, tested):
@@ -90,12 +87,9 @@ def compare_nested_list(m, tested):
         if isinstance(el, MongoDictReflection):
             compare_nested_dict(m[ix], el)
 
-        try:
-            assert m[ix] == el
-            assert m.maxlen == tested.maxlen
-            assert m.key == tested.key
-        except Exception as e:
-            raise e
+        assert m[ix] == el
+        assert m.maxlen == tested.maxlen
+        assert m.key == tested.key
 
 
 async def mongo_compare(ex, m):

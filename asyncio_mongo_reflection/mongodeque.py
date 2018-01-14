@@ -169,9 +169,14 @@ class MongoDeque(deque, _SyncObjBase):
     def __setitem__(self, key, value):
         super(MongoDeque, self).__setitem__(key, value)
 
+        key = len(self) + key if key < 0 else key
+
         if not hasattr(value, '_parent') or self._instance_from_outside(value):
             if self._check_nested_type(value):
                 value = self._run_now(self._proc_pushed(self, [value]))
+            elif MongoDictReflection._check_nested_type(value):
+                self[key] = self._run_now(MongoDictReflection._create_nested(self, key, value))
+                value = [self._run_now(MongoDictReflection._proc_pushed(self[key], dict(value), recursive_call=True))]
             else:
                 value = [self._dumps(value)]
             self._enqueue_coro(self._mongo_setitem(key, value), self._tree_depth)

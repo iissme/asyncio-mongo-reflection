@@ -87,14 +87,29 @@ async def test_dict_pop(_d):
     # dict - list
     m['b'].pop()
     o['b'].pop()
+    # dict - list (new)
+    m['g'] = [6, 7, 8]
+    m['g'].pop()
+    o['g'] = deque([6, 7, 8])
+    o['g'].pop()
 
     # dict - list - list
     m['b'][2].pop()
     o['b'][2].pop()
+    # dict - list - list (new)
+    m['b'].append([1, 2, 3])
+    m['b'][-1].pop()
+    o['b'].append(deque([1, 2, 3]))
+    o['b'][-1].pop()
 
     # dict - list - dict
     m['b'][1].popitem()
     o['b'][1].popitem()
+    # dict - list - dict (new)
+    m['b'].append({'f': 1, 'g': 2})
+    m['b'][-1].popitem()
+    o['b'].append({'f': 1, 'g': 2})
+    o['b'][-1].popitem()
 
     await m.mongo_pending.join()
 
@@ -109,14 +124,29 @@ async def test_list_pop(_l):
     # list - dict
     m[2].popitem()
     o[2].popitem()
+    # list - dict (new)
+    m[-1] = {'f': 1, 'g': 2}
+    m[-1].popitem()
+    o[-1] = {'f': 1, 'g': 2}
+    o[-1].popitem()
 
     # list - dict - list
     m[2]['b'].pop()
     o[2]['b'].pop()
+    # list - dict - list (new)
+    m[2]['g'] = [1, 2, 3]
+    m[2]['g'].pop()
+    o[2]['g'] = deque([1, 2, 3])
+    o[2]['g'].pop()
 
     # list - dict - dict
     m[2]['a'].popitem()
     o[2]['a'].popitem()
+    # list - dict - dict (new)
+    m[2]['h'] = {'j': 1, 'i': 2}
+    m[2]['h'].popitem()
+    o[2]['h'] = {'j': 1, 'i': 2}
+    o[2]['h'].popitem()
 
     await m.mongo_pending.join()
 
