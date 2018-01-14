@@ -57,6 +57,30 @@ def _l(request):
 
 
 @async_test
+async def test_default_list_loaded(_l):
+    m, o = _l[0], _l[1]
+
+    m_loaded = await MongoDequeReflection(col=m.col, obj_ref=m.obj_ref, key=m.key,
+                                          dumps=m._dumps, loads=m._loads, maxlen=m.maxlen)
+
+    compare_nested_list(m, m_loaded)
+
+    assert m_loaded == o
+
+
+@async_test
+async def test_default_dict_loaded(_d):
+    m, o = _d[0], _d[1]
+
+    m_loaded = await MongoDictReflection(col=m.col, obj_ref=m.obj_ref, key=m.key,
+                                         dumps=m._dumps, loads=m._loads)
+
+    compare_nested_dict(m, m_loaded)
+
+    assert m_loaded == o
+
+
+@async_test
 async def test_dict_pop(_d):
     m, o = _d[0], _d[1]
 
@@ -101,7 +125,7 @@ async def test_list_pop(_l):
 
 
 @async_test
-async def test_list_loaded(_l):
+async def test_final_list_loaded(_l):
     m, o = _l[0], _l[1]
 
     m_loaded = await MongoDequeReflection(col=m.col, obj_ref=m.obj_ref, key=m.key,
@@ -113,7 +137,7 @@ async def test_list_loaded(_l):
 
 
 @async_test
-async def test_dict_loaded(_d):
+async def test_final_dict_loaded(_d):
     m, o = _d[0], _d[1]
 
     m_loaded = await MongoDictReflection(col=m.col, obj_ref=m.obj_ref, key=m.key,

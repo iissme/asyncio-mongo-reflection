@@ -32,6 +32,7 @@ asyncio.set_event_loop(loop)
 client = motor_asyncio.AsyncIOMotorClient()
 db = client.test_db
 
+
 # you should 'await' while reflection instance is created
 # than there is no difference with python's deque (every mongo writing op will be done in background)
 # with 'rewrite=False' flag initial list '[1, 2, [6, 7, 8]]' will be ignored next time (data will be loaded from db).
@@ -73,9 +74,9 @@ from asyncio_mongo_reflection import MongoDequeReflection
 import motor.motor_asyncio
 client = motor.motor_asyncio.AsyncIOMotorClient()
 db = client.test_db
-ref = await MongoDequeReflection.(col=db['example_reflection'],
-                                  obj_ref={'array_id': 'interacive_example'},
-                                  key='inner.arr', maxlen=10)
+ref = await MongoDequeReflection(col=db['example_reflection'],
+                                 obj_ref={'array_id': 'interacive_example'},
+                                 key='inner.arr', maxlen=10)
 
 # empty reflection is created
 # now you can try to modify ref and trace changes in any mongodb client
