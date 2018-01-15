@@ -216,10 +216,11 @@ class _SyncObjBase(metaclass=ABCAsyncInit):
 
         if isinstance(self, dict):
             new_base = new_base if isinstance(new_base, dict) else {}
+            cached_base = {}
         else:
             new_base = new_base if isinstance(new_base, list) else list()
+            cached_base = []
 
-        cached_base = None
         if not hasattr(self, '_parent'):
             cached_base = await self._mongo_get()
             if new_base and new_base != cached_base and getattr(self, 'rewrite', True):
