@@ -7,85 +7,117 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 
 
-class MongoDict(dict, _SyncObjBase):
+class DictReflection(dict, _SyncObjBase):
     @abstractmethod
-    async def _mongo_get(self):
+    async def _reflection_get(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_clear(self):
+    async def _reflection_clear(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_pop(self):
+    async def _reflection_pop(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_popitem(self):
+    async def _reflection_popitem(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_update(self):
+    async def _reflection_update(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_setitem(self):
+    async def _reflection_setitem(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_delitem(self):
+    async def _reflection_delitem(self):
         raise NotImplementedError
 
     @staticmethod
     def _instance_from_outside(v):
         # dirty, but haven't found another way yet
-        if isinstance(v, MongoDictReflection):
+        if isinstance(v, DictReflection):
             stack = inspect.stack()
             if stack[2][3] != '_proc_pushed' and stack[2][3] != '_proc_loaded':
                 return True
 
     def __setitem__(self, key, value):
-        super(MongoDict, self).__setitem__(key, value)
+        super(DictReflection, self).__setitem__(key, value)
 
         if not hasattr(value, '_parent') or self._instance_from_outside(value):
             if self._check_nested_type(value):
                 value = self._run_now(self._proc_pushed(self, {key: value}))
-            elif MongoDequeReflection._check_nested_type(value):
-                self[key] = self._run_now(MongoDequeReflection._create_nested(self, key, list(value)))
-                value = {f'{self.key}.{key}': self._run_now(MongoDequeReflection._proc_pushed(self[key], value))}
+            elif DequeReflection._check_nested_type(value):
+                self[key] = self._run_now(self._deque_cls._create_nested(self, key, list(value)))
+                value = {f'{self.key}.{key}': self._run_now(DequeReflection._proc_pushed(self[key], value))}
             else:
                 value = {f'{self.key}.{key}': self._dumps(value)}
 
-            self._enqueue_coro(self._mongo_setitem(value), self._tree_depth)
+            self._enqueue_coro(self._reflection_setitem(value), self._tree_depth)
 
     def __delitem__(self, key):
-        self._enqueue_coro(self._mongo_delitem(key), self._tree_depth)
-        super(MongoDict, self).__delitem__(key)
+        self._enqueue_coro(self._reflection_delitem(key), self._tree_depth)
+        super(DictReflection, self).__delitem__(key)
 
     @classmethod
     def _flattern(cls, dct, dumps=None):
         fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
 
         for key, val in dct.items():
-            if isinstance(val, MongoDictReflection) or isinstance(val, dict):
+            if isinstance(val, DictReflection) or isinstance(val, dict):
                 dct[key] = cls._flattern(dict(val), dumps)
-            elif MongoDequeReflection._check_nested_type(val):
-                dct[key] = MongoDequeReflection._flattern(val, dumps)
+            elif DequeReflection._check_nested_type(val):
+                dct[key] = DequeReflection._flattern(list(val), dumps)
             else:
                 dct[key] = fdumps(val)
         return dct
 
+    @classmethod
+    def _move_nested_ixs(cls, self):
+        for key, val in self.items():
+            if isinstance(val, DequeReflection) or isinstance(val, DictReflection):
+                exp_key = f'{self.key}.{key}'
+                if val.key != exp_key:
+                    val.key = exp_key
+                    type(val)._move_nested_ixs(val)
+
+    @classmethod
+    async def _create_nested(cls, parent, key, val):
+        self = cls.__cnew__(cls)
+        self.__dict__ = parent.__dict__.copy()
+        return await cls.init(self, val, key=f'{self.key}.{key}', _parent=proxy(parent))
+
+    @classmethod
+    async def _proc_loaded(cls, parent, dct, loads, parent_key=None):
+        for key, val in dct.items():
+            if isinstance(val, dict):
+                set_key = f'{parent_key}.{key}' if parent_key else key
+                val = await cls._proc_loaded(parent, val, loads, set_key)
+                nested_cls = parent.__class__ if isinstance(parent, DictReflection) else parent._dict_cls
+                dct[key] = await nested_cls._create_nested(parent, set_key, val)
+            elif isinstance(val, list):
+                set_key = f'{parent_key}.{key}' if parent_key else key
+                val = await DequeReflection._proc_loaded(parent, val, loads, set_key)
+                nested_cls = parent.__class__ if isinstance(parent, DequeReflection) else parent._deque_cls
+                dct[key] = await nested_cls._create_nested(parent, set_key, val)
+            else:
+                dct[key] = loads(val)
+        return dct
+
     @staticmethod
     def _check_nested_type(val):
-        return isinstance(val, dict) or isinstance(val, MongoDictReflection)
+        return isinstance(val, dict) or isinstance(val, DictReflection)
 
     @staticmethod
     async def _proc_pushed(self, pdict, recursive_call=False):
 
-        to_mongo_dict = {}
+        proc_dict = {}
         for key, val in pdict.items():
-            if MongoDequeReflection._check_nested_type(val):
-                self[key] = rec_self = await MongoDequeReflection._create_nested(self, key, list(val))
+            if DequeReflection._check_nested_type(val):
+                self[key] = rec_self = await self._deque_cls._create_nested(self, key, list(val))
                 val = await rec_self._proc_pushed(rec_self, val)
             elif self._check_nested_type(val):
                 self[key] = rec_self = await self._create_nested(self, key, dict(val))
@@ -94,11 +126,11 @@ class MongoDict(dict, _SyncObjBase):
                 val = self._dumps(val)
 
             if recursive_call:
-                to_mongo_dict[key] = val
+                proc_dict[key] = val
             else:
-                to_mongo_dict[f'{self.key}.{key}'] = val
+                proc_dict[f'{self.key}.{key}'] = val
 
-        return to_mongo_dict
+        return proc_dict
 
     def __getattribute__(self, name):
         def cb(func, deque_method):
@@ -115,7 +147,7 @@ class MongoDict(dict, _SyncObjBase):
                     args.append(self._run_now(self._proc_pushed(self, merged_dict)))
                     kwargs = {}
 
-                self._enqueue_coro(getattr(self, f'_mongo_{deque_method}')(*args, **kwargs), self._tree_depth)
+                self._enqueue_coro(getattr(self, f'_reflection_{deque_method}')(*args, **kwargs), self._tree_depth)
                 return func_res
 
             return inner
@@ -126,7 +158,7 @@ class MongoDict(dict, _SyncObjBase):
         return res
 
 
-class MongoDictReflection(MongoDict):
+class MongoDictReflection(DictReflection):
 
     async def __ainit__(self, d=None, *, dumps=None, loads=None, **kwargs):
 
@@ -147,15 +179,10 @@ class MongoDictReflection(MongoDict):
         elif not isinstance(self.col, AsyncIOMotorCollection):
             raise TypeError('"col" argument must be a AsyncIOMotorCollection instance!')
 
+        self._deque_cls = MongoDequeReflection
         await super().__ainit__(d, **kwargs)
 
-    @classmethod
-    async def _create_nested(cls, parent, key, val):
-        self = cls.__cnew__(cls)
-        self.__dict__ = parent.__dict__.copy()
-        return await cls.init(self, val, key=f'{self.key}.{key}', _parent=proxy(parent))
-
-    async def _mongo_get(self):
+    async def _reflection_get(self):
         mongo_dict = await self.col.find_one(self.obj_ref, projection={self.key: 1})
         if not mongo_dict:
             mongo_dict = await self.col.find_one_and_update(self.obj_ref, {'$set': {self.key: {}}},
@@ -172,38 +199,23 @@ class MongoDictReflection(MongoDict):
 
         return await self._proc_loaded(self, mongo_dict, self._loads)
 
-    @classmethod
-    async def _proc_loaded(cls, parent, dct, loads, parent_key=None):
-        for key, val in dct.items():
-            if isinstance(val, dict):
-                set_key = f'{parent_key}.{key}' if parent_key else key
-                val = await cls._proc_loaded(parent, val, loads, set_key)
-                dct[key] = await cls._create_nested(parent, set_key, val)
-            elif isinstance(val, list):
-                set_key = f'{parent_key}.{key}' if parent_key else key
-                val = await MongoDequeReflection._proc_loaded(parent, val, loads, set_key)
-                dct[key] = await MongoDequeReflection._create_nested(parent, set_key, val)
-            else:
-                dct[key] = loads(val)
-        return dct
-
-    async def _mongo_clear(self):
+    async def _reflection_clear(self):
         return await self.col.update_one(self.obj_ref, {'$set': {self.key: {}}})
 
-    async def _mongo_pop(self, pop_key, default=None):
+    async def _reflection_pop(self, pop_key, default=None):
         return await self.col.update_one(self.obj_ref, {'$unset': {f'{self.key}.{pop_key}': ''}})
 
-    async def _mongo_popitem(self, popped_key):
-        return await self._mongo_pop(popped_key)
+    async def _reflection_popitem(self, popped_key):
+        return await self._reflection_pop(popped_key)
 
-    async def _mongo_update(self, upd_dict):
+    async def _reflection_update(self, upd_dict):
         return await self.col.update_one(self.obj_ref, {'$set': upd_dict}, upsert=True)
 
-    async def _mongo_setitem(self, val):
-        return await self._mongo_update(val)
+    async def _reflection_setitem(self, val):
+        return await self._reflection_update(val)
 
-    async def _mongo_delitem(self, key):
-        return await self._mongo_pop(key)
+    async def _reflection_delitem(self, key):
+        return await self._reflection_pop(key)
 
 
-from .mongodeque import MongoDequeReflection
+from .mongodeque import MongoDequeReflection, DequeReflection

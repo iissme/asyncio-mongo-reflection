@@ -41,13 +41,13 @@ def flattern_list_nested(nlist, dumps=None, lists_to_deque=True):
     fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
 
     for ix, el in enumerate(nlist):
-        if isinstance(el, MongoDequeReflection) or isinstance(el, deque):
+        if isinstance(el, DequeReflection) or isinstance(el, deque):
             if lists_to_deque:
                 nlist[ix] = deque(list(el), maxlen=el.maxlen)
             else:
                 nlist[ix] = list(el)
-                flattern_list_nested(nlist[ix], dumps=dumps, lists_to_deque=lists_to_deque)
-        elif isinstance(el, MongoDictReflection) or type(el) is dict:
+            flattern_list_nested(nlist[ix], dumps=dumps, lists_to_deque=lists_to_deque)
+        elif isinstance(el, DictReflection) or type(el) is dict:
             nlist[ix] = flattern_dict_nested(dict(el), dumps, lists_to_deque=lists_to_deque)
         else:
             nlist[ix] = fdumps(el)
@@ -59,9 +59,9 @@ def flattern_dict_nested(dct, dumps=None, lists_to_deque=False):
     fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
 
     for key, val in dct.items():
-        if isinstance(val, MongoDictReflection) or isinstance(val, dict):
-            dct[key] = flattern_dict_nested(dict(val), dumps)
-        elif type(val) is list or isinstance(val, MongoDequeReflection) or isinstance(val, deque):
+        if isinstance(val, DictReflection) or isinstance(val, dict):
+            dct[key] = flattern_dict_nested(dict(val), dumps, lists_to_deque=lists_to_deque)
+        elif type(val) is list or isinstance(val, DequeReflection) or isinstance(val, deque):
             val = deque(val) if lists_to_deque else list(val)
             dct[key] = flattern_list_nested(val, dumps, lists_to_deque=lists_to_deque)
         else:
@@ -71,9 +71,11 @@ def flattern_dict_nested(dct, dumps=None, lists_to_deque=False):
 
 def compare_nested_dict(m, tested):
     for key, val in tested.items():
-        if isinstance(val, MongoDictReflection):
+        if isinstance(val, DictReflection):
+            assert hasattr(val, '_deque_cls')
             compare_nested_dict(m[key], val)
-        if isinstance(val, MongoDequeReflection):
+        elif isinstance(val, DequeReflection):
+            assert hasattr(val, '_dict_cls')
             compare_nested_list(m[key], val)
 
         assert m[key] == val
@@ -82,13 +84,15 @@ def compare_nested_dict(m, tested):
 
 def compare_nested_list(m, tested):
     for ix, el in enumerate(tested):
-        if isinstance(el, MongoDequeReflection):
+        if isinstance(el, DequeReflection):
+            assert hasattr(el, '_dict_cls')
             compare_nested_list(m[ix], el)
-        if isinstance(el, MongoDictReflection):
+        elif isinstance(el, DictReflection):
+            assert hasattr(el, '_deque_cls')
             compare_nested_dict(m[ix], el)
 
         assert m[ix] == el
-        assert m.maxlen == tested.maxlen
+        # assert m.maxlen == tested.maxlen
         assert m.key == tested.key
 
 

@@ -10,7 +10,7 @@ lrun_uc(db['test_arr_obj'].remove())
 MAX_LEN = 7
 
 
-mongo_int = lrun_uc(MongoDequeReflection([0, 4, 3, 33, 5, deque([1, 2, 3], maxlen=5), 2, 53, 4, 5],
+mongo_int = lrun_uc(MongoDequeReflection([0, 4, 3, 33, 5, deque([1, 2, 3]), 2, 53, 4, 5],
                                          col=db['test_arr_int'],
                                          obj_ref={'array_id': 'test_deque'},
                                          key='inner.arr',
@@ -39,6 +39,18 @@ async def db_compare(m, o):
                 ids=['int', 'str', 'obj'])
 def _(request):
     return request.param, flattern_list_nested(deque(list(request.param), maxlen=request.param.maxlen))
+
+
+@async_test
+async def test_default_loaded(_):
+    m, o = _[0], _[1]
+
+    m_loaded = await MongoDequeReflection(col=m.col, obj_ref=m.obj_ref, key=m.key,
+                                          dumps=m._dumps, loads=m._loads, maxlen=m.maxlen)
+
+    compare_nested_list(m, m_loaded)
+
+    assert m_loaded == o
 
 
 @async_test

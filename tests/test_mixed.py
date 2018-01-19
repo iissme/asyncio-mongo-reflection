@@ -23,7 +23,7 @@ mongo_mixed_list = lrun_uc(
         [
             1,
             [1, 2, 3],
-            {'a': {'a': 1, 'b': 2}, 'b': [1, 2, 3], 'c': 3},
+            {'a': {'a': 1, 'b': 2, 'p': [6, 7, 8]}, 'b': [1, 2, 3], 'c': 3},
             2,
             3
         ],
@@ -151,6 +151,47 @@ async def test_list_pop(_l):
     await m.mongo_pending.join()
 
     assert m == o
+    await mongo_compare(flattern_list_nested(list(m), m._dumps, lists_to_deque=False), m)
+
+
+@async_test
+async def test_list_slice(_l):
+    m, o = _l[0], list(_l[1])
+    # get slice
+    m_slice = m[2:6:2]
+    o_slice = o[2:6:2]
+    assert m_slice == flattern_list_nested(o_slice, m._dumps, lists_to_deque=False)
+    # add deep nesting to check ixs after slices
+    m[2]['b'].append({'g': 4})
+    o[2]['b'].append({'g': 4})
+    # slice from lef
+    m[:2] = [3, 4, 6, 7]
+    o[:2] = [3, 4, 6, 7]
+    # slice with step
+    m[0:4:2] = [33, 66]
+    o[0:4:2] = [33, 66]
+    # insert 2 instead of 1 element
+    m[-2:-1] = [{'b': 10}, {'c': 10}]
+    o[-2:-1] = [{'b': 10}, {'c': 10}]
+    # insert from right
+    m[5:] = [8, 9, 10, 11]
+    o[5:] = [8, 9, 10, 11]
+    # insert at negative index with step
+    m[:-1:5] = [88, 77]
+    o[:-1:5] = [88, 77]
+    # negative step
+    m[::-3] = [66, 77, 88]
+    o[::-3] = [66, 77, 88]
+    # insert uncommon iterable
+    m[-2:-2] = {'b': 10}
+    o[-2:-2] = {'b': 10}
+    # start > stop insert
+    m[4:3] = {'q': 10, 'c': 10}
+    o[4:3] = {'q': 10, 'c': 10}
+
+    await m.mongo_pending.join()
+
+    assert m == deque(o)
     await mongo_compare(flattern_list_nested(list(m), m._dumps, lists_to_deque=False), m)
 
 

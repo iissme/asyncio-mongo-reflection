@@ -27,6 +27,18 @@ def _(request):
 
 
 @async_test
+async def test_default_dict_loaded(_):
+    m, o = _[0], _[1]
+
+    m_loaded = await MongoDictReflection(col=m.col, obj_ref=m.obj_ref, key=m.key,
+                                         dumps=m._dumps, loads=m._loads)
+
+    compare_nested_dict(m, m_loaded)
+
+    assert m_loaded == o
+
+
+@async_test
 async def test_pop(_):
     m, o = _[0], _[1]
 
@@ -133,21 +145,13 @@ async def test_del(_):
 
 
 @async_test
-async def test_loaded(_):
+async def test_dict_loaded(_):
     m, o = _[0], _[1]
 
     m_loaded = await MongoDictReflection(col=m.col, obj_ref=m.obj_ref, key=m.key,
                                          dumps=m._dumps, loads=m._loads)
 
-    def compare_nested(m, tested):
-        for key, val in tested.items():
-            if isinstance(val, MongoDictReflection):
-                compare_nested(m[key], val)
-
-            assert m[key] == val
-            assert m.key == tested.key
-
-    compare_nested(m, m_loaded)
+    compare_nested_dict(m, m_loaded)
 
     assert m_loaded == o
 

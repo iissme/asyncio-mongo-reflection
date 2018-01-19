@@ -222,10 +222,10 @@ class _SyncObjBase(metaclass=ABCAsyncInit):
             cached_base = []
 
         if not hasattr(self, '_parent'):
-            cached_base = await self._mongo_get()
+            cached_base = await self._reflection_get()
             if new_base and new_base != cached_base and getattr(self, 'rewrite', True):
                 cached_base = None
-                await self._mongo_clear()
+                await self._reflection_clear()
 
         super(type(self), self).__init__(new_base if new_base and not cached_base else cached_base,
                                          **super_kwargs)
@@ -233,9 +233,9 @@ class _SyncObjBase(metaclass=ABCAsyncInit):
         if new_base and not cached_base and not hasattr(self, '_parent'):
             new_base = await self._proc_pushed(self, new_base)
             if isinstance(self, dict):
-                await self._mongo_update(new_base)
+                await self._reflection_update(new_base)
             else:
-                await self._mongo_extend(new_base, maxlen=maxlen)
+                await self._reflection_extend(new_base, maxlen=maxlen)
 
     def _run_now(self, coro):
         coro_future = self.sync_executor.submit(coro)

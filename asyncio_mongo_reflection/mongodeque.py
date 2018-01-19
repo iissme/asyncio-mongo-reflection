@@ -4,6 +4,7 @@ import random
 from abc import ABC, abstractmethod
 from collections import deque, Iterable
 from weakref import proxy
+from itertools import zip_longest, islice
 
 from .base import _SyncObjBase, MongoReflectionError
 from motor.motor_asyncio import AsyncIOMotorCollection
@@ -79,62 +80,62 @@ class MongoDequeSimple(deque, ABC):  # pragma: no cover
         return res
 
 
-class MongoDeque(deque, _SyncObjBase):
+class DequeReflection(deque, _SyncObjBase):
 
     @abstractmethod
-    async def _mongo_get(self):
+    async def _reflection_get(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_append(self):
+    async def _reflection_append(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_appendleft(self):
+    async def _reflection_appendleft(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_clear(self):
+    async def _reflection_clear(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_extend(self):
+    async def _reflection_extend(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_extendleft(self):
+    async def _reflection_extendleft(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_insert(self):
+    async def _reflection_insert(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_pop(self):
+    async def _reflection_pop(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_popleft(self):
+    async def _reflection_popleft(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_remove(self):
+    async def _reflection_remove(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_reverse(self):
+    async def _reflection_reverse(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_rotate(self):
+    async def _reflection_rotate(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_setitem(self):
+    async def _reflection_setitem(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def _mongo_delitem(self):
+    async def _reflection_delitem(self):
         raise NotImplementedError
 
     def __add__(self, other):
@@ -161,66 +162,156 @@ class MongoDeque(deque, _SyncObjBase):
     @staticmethod
     def _instance_from_outside(v):
         # dirty, but haven't found another way yet
-        if isinstance(v, MongoDequeReflection):
+        if isinstance(v, DequeReflection):
             stack = inspect.stack()
             if stack[2][3] != '_proc_pushed' and stack[2][3] != '_proc_loaded':
                 return True
 
-    def __setitem__(self, key, value):
-        super(MongoDeque, self).__setitem__(key, value)
+    def __getitem__(self, index):
+        # get slices as flat list
+        if isinstance(index, slice):
+            start = index.start
+            start = len(self) + start if start and start < 0 else start
 
-        key = len(self) + key if key < 0 else key
+            stop = index.stop
+            stop = len(self) + stop if stop and stop < 0 else stop
+
+            step = index.step
+            sl_step = -1 * step if step and step < 0 else step
+            dslice = self._flattern([i for i in islice(self, start, stop, sl_step)], self._dumps)
+            if step and step < 0:
+                dslice.reverse()
+            return dslice
+
+        return super(DequeReflection, self).__getitem__(index)
+
+    def __setitem__(self, key, value):
+        set_kvs = []
+        ins_vs = []
+        ins_ix = None
+        from_left = False
+
+        if type(key) is int:
+            key = len(self) + key if key < 0 else key
+            set_kvs.append((key, value))
+            super(DequeReflection, self).__setitem__(key, value)
+        else:
+            if self[key] is []:
+                return
+
+            value = [i for i in value.__iter__()]
+            start = key.start
+            stop = key.stop
+
+            if start and stop and (start == stop or start > stop):
+                stop = start
+                ins_vs = value[:]
+                value = []
+            else:
+                changed_ixs = [i for i in range(*key.indices(len(self)))]
+                from_left = start is None and len(value) > len(changed_ixs)
+                if from_left:
+                    split_at = len(changed_ixs)
+                    ins_vs = value[:split_at]
+                    ins_vs.reverse()
+                    value = value[split_at:]
+
+                for ix, val in zip_longest(changed_ixs, value):
+                    if ix is not None:
+                        set_kvs.append((ix, val))
+                        super(DequeReflection, self).__setitem__(ix, val)
+                    else:
+                        ins_vs.append(val)
+
+            ins_val_at = ins_ix = (stop if stop else len(self)) if not from_left else 0
+            for val in ins_vs:
+                super(DequeReflection, self).insert(ins_val_at, val)
+                if not from_left:
+                    ins_val_at += 1
+
+        self._move_nested_ixs(self)
 
         if not hasattr(value, '_parent') or self._instance_from_outside(value):
-            if self._check_nested_type(value):
-                value = self._run_now(self._proc_pushed(self, [value]))
-            elif MongoDictReflection._check_nested_type(value):
-                self[key] = self._run_now(MongoDictReflection._create_nested(self, key, value))
-                value = [self._run_now(MongoDictReflection._proc_pushed(self[key], dict(value), recursive_call=True))]
-            else:
-                value = [self._dumps(value)]
-            self._enqueue_coro(self._mongo_setitem(key, value), self._tree_depth)
+
+            for key, value in set_kvs:
+                if self._check_nested_type(value):
+                    value = self._run_now(self._proc_pushed(self, [value]))
+                elif DictReflection._check_nested_type(value):
+                    self[key] = self._run_now(self._dict_cls._create_nested(self, key, value))
+                    value = [self._run_now(DictReflection._proc_pushed(self[key], dict(value), recursive_call=True))]
+                else:
+                    value = [self._dumps(value)]
+                self._enqueue_coro(self._reflection_setitem(key, value), self._tree_depth)
+
+            if ins_vs:
+                if from_left:
+                    ins_vs.reverse()
+
+                if ins_ix < 0:
+                    ins_ix = len(self) + ins_ix - 1
+
+                self._run_now(self._proc_pushed(self, ins_vs))
+                self._enqueue_coro(self._reflection_extend(ins_vs, position=ins_ix), self._tree_depth)
 
     def __delitem__(self,  key):
-        super(MongoDeque, self).__delitem__(key)
+        super(DequeReflection, self).__delitem__(key)
         self._move_nested_ixs(self)
-        self._enqueue_coro(self._mongo_delitem(key), self._tree_depth)
+        self._enqueue_coro(self._reflection_delitem(key), self._tree_depth)
 
     @classmethod
     def _flattern(cls, nlist, dumps=None):
         fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
 
         for ix, el in enumerate(nlist):
-            if isinstance(el, MongoDequeReflection) or isinstance(el, deque):
-                nlist[ix] = list(el)
-                cls._flattern(nlist[ix], dumps)
-            elif MongoDictReflection._check_nested_type(el):
-                nlist[ix] = MongoDictReflection._flattern(dict(el), dumps)
+            if isinstance(el, DequeReflection) or isinstance(el, deque):
+                nlist[ix] = cls._flattern(list(el), dumps)
+            elif DictReflection._check_nested_type(el):
+                nlist[ix] = DictReflection._flattern(dict(el), dumps)
             else:
                 nlist[ix] = fdumps(el)
 
         return nlist
 
-    @staticmethod
-    def _check_nested_type(el):
-        return isinstance(el, list) or isinstance(el, deque) or isinstance(el, MongoDequeReflection)
-
-    @staticmethod
-    def _move_nested_ixs(self):
+    @classmethod
+    def _move_nested_ixs(cls, self):
         for ix, el in enumerate(self):
-            if isinstance(el, MongoDeque):
+            if isinstance(el, DequeReflection) or isinstance(el, DictReflection):
                 exp_key = f'{self.key}.{ix}'
                 if el.key != exp_key:
-                    el.nested_ix = ix
                     el.key = exp_key
-                    self._move_nested_ixs(el)
+                    type(el)._move_nested_ixs(el)
+
+    @classmethod
+    async def _create_nested(cls, parent, ix, val):
+        self = cls.__cnew__(cls)
+        self.__dict__ = parent.__dict__.copy()
+        maxlen = getattr(val, 'maxlen', getattr(parent, 'maxlen', None))
+        return await cls.init(self, list(val), key=f'{self.key}.{ix}',
+                              maxlen=maxlen, _parent=proxy(parent))
+
+    @classmethod
+    async def _proc_loaded(cls, parent, arr, loads, parent_ix=None):
+        for ix, el in enumerate(arr):
+            if isinstance(el, list):
+                set_ix = f'{parent_ix}.{ix}' if parent_ix else ix
+                el = await cls._proc_loaded(parent, el, loads, set_ix)
+                nested_cls = parent.__class__ if isinstance(parent, DequeReflection) else parent._deque_cls
+                arr[ix] = await nested_cls._create_nested(parent, set_ix, el)
+            elif isinstance(el, dict):
+                set_ix = f'{parent_ix}.{ix}' if parent_ix else ix
+                el = await DictReflection._proc_loaded(parent, el, loads, set_ix)
+                nested_cls = parent.__class__ if isinstance(parent, DictReflection) else parent._dict_cls
+                arr[ix] = await nested_cls._create_nested(parent, set_ix, el)
+            else:
+                arr[ix] = loads(el)
+        return arr
 
     def _find_el(self, el):
         found_mod_at = []
         found_flat_at = []
         for ix, val in enumerate(self):
             if val == el:
-                if isinstance(val, MongoDictReflection) or isinstance(val, MongoDequeReflection):
+                if isinstance(val, DictReflection) or isinstance(val, DequeReflection):
                     found_mod_at.append(ix)
                 else:
                     found_flat_at.append(ix)
@@ -234,6 +325,10 @@ class MongoDeque(deque, _SyncObjBase):
             return found_flat_at[0]
 
     @staticmethod
+    def _check_nested_type(el):
+        return isinstance(el, list) or isinstance(el, deque) or isinstance(el, DequeReflection)
+
+    @staticmethod
     async def _proc_pushed(self, arg, from_left=False):
         push_arr = []
 
@@ -241,14 +336,14 @@ class MongoDeque(deque, _SyncObjBase):
             return arg
 
         for el in arg:
-            if MongoDictReflection._check_nested_type(el):
+            if DictReflection._check_nested_type(el):
                 try:
                     ix = self._find_el(el)
                 except ValueError:  # trimmed by maxlen
-                    el = await MongoDictReflection._proc_pushed(self, dict(el), recursive_call=True)
+                    el = await DictReflection._proc_pushed(self, dict(el), recursive_call=True)
                 else:
-                    self[ix] = await MongoDictReflection._create_nested(self, ix, el)
-                    el = await MongoDictReflection._proc_pushed(self[ix], dict(el), recursive_call=True)
+                    self[ix] = await self._dict_cls._create_nested(self, ix, el)
+                    el = await DictReflection._proc_pushed(self[ix], dict(el), recursive_call=True)
 
             elif self._check_nested_type(el):
                 try:
@@ -283,7 +378,7 @@ class MongoDeque(deque, _SyncObjBase):
                     args[p_ix] = self._run_now(self._proc_pushed(
                         self, args[p_ix], from_left=True if name is 'extendleft' else False))
 
-                self._enqueue_coro(getattr(self, f'_mongo_{deque_method}')(*args), self._tree_depth)
+                self._enqueue_coro(getattr(self, f'_reflection_{deque_method}')(*args), self._tree_depth)
                 self._move_nested_ixs(self)
                 return func_res
 
@@ -296,7 +391,7 @@ class MongoDeque(deque, _SyncObjBase):
         return res
 
 
-class MongoDequeReflection(MongoDeque):
+class MongoDequeReflection(DequeReflection):
 
     async def __ainit__(self, lst=list(), *, dumps=None, loads=None, **kwargs):
 
@@ -317,18 +412,10 @@ class MongoDequeReflection(MongoDeque):
         elif not isinstance(self.col, AsyncIOMotorCollection):
             raise TypeError('"col" argument must be a AsyncIOMotorCollection instance!')
 
+        self._dict_cls = MongoDictReflection
         await super().__ainit__(lst, **kwargs)
 
-    @classmethod
-    async def _create_nested(cls, parent, ix, val):
-        self = cls.__cnew__(cls)
-        self.__dict__ = parent.__dict__.copy()
-        maxlen = getattr(val, 'maxlen', None)
-        self.nested_ix = ix
-        return await cls.init(self, list(val), key=f'{self.key}.{ix}',
-                              maxlen=maxlen, _parent=proxy(parent))
-
-    async def _mongo_get(self):
+    async def _reflection_get(self):
         mongo_arr = await self.col.find_one(self.obj_ref, projection={self.key: 1})
 
         if not mongo_arr:
@@ -347,31 +434,16 @@ class MongoDequeReflection(MongoDeque):
 
         return await self._proc_loaded(self, mongo_arr, self._loads)
 
-    @classmethod
-    async def _proc_loaded(cls, parent, arr, loads, parent_ix=None):
-        for ix, el in enumerate(arr):
-            if isinstance(el, list):
-                set_ix = f'{parent_ix}.{ix}' if parent_ix else ix
-                el = await cls._proc_loaded(parent, el, loads, set_ix)
-                arr[ix] = await cls._create_nested(parent, set_ix, el)
-            elif isinstance(el, dict):
-                set_ix = f'{parent_ix}.{ix}' if parent_ix else ix
-                el = await MongoDictReflection._proc_loaded(parent, el, loads, set_ix)
-                arr[ix] = await MongoDictReflection._create_nested(parent, set_ix, el)
-            else:
-                arr[ix] = loads(el)
-        return arr
+    async def _reflection_append(self, el):
+        return await self._reflection_extend(el)
 
-    async def _mongo_append(self, el):
-        return await self._mongo_extend(el)
+    async def _reflection_appendleft(self, el):
+        return await self._reflection_extendleft(el)
 
-    async def _mongo_appendleft(self, el):
-        return await self._mongo_extendleft(el)
-
-    async def _mongo_clear(self):
+    async def _reflection_clear(self):
         return await self.col.update_one(self.obj_ref, {'$set': {f'{self.key}': []}})
 
-    async def _mongo_extend(self, arr, maxlen=None, position=None):
+    async def _reflection_extend(self, arr, maxlen=None, position=None):
         maxlen = maxlen or self.maxlen
         mongo_slice = {'$slice': -maxlen} if maxlen else {}
         mongo_position = {'$position': position} if position is not None else {}
@@ -383,26 +455,26 @@ class MongoDequeReflection(MongoDeque):
         return await self.col.update_one(self.obj_ref,
                                          {'$push': {f'{self.key}': push_val}}, upsert=True)
 
-    async def _mongo_extendleft(self, arr):
+    async def _reflection_extendleft(self, arr):
         maxlen = -self.maxlen if self.maxlen is not None else None
-        return await self._mongo_extend(arr, maxlen, 0)
+        return await self._reflection_extend(arr, maxlen, 0)
 
-    async def _mongo_insert(self, ix, el):
-        return await self._mongo_extend(el, position=ix)
+    async def _reflection_insert(self, ix, el):
+        return await self._reflection_extend(el, position=ix)
 
-    async def _mongo_pop(self):
+    async def _reflection_pop(self):
         return await self.col.update_one(self.obj_ref, {'$pop': {f'{self.key}': 1}})
 
-    async def _mongo_popleft(self):
+    async def _reflection_popleft(self):
         return await self.col.update_one(self.obj_ref, {'$pop': {f'{self.key}': -1}})
 
-    async def _mongo_remove(self, el):
+    async def _reflection_remove(self, el):
         h = random.getrandbits(32)
 
         if self._check_nested_type(el):
             el = self._flattern(list(el), self._dumps)
-        if MongoDictReflection._check_nested_type(el):
-            el = MongoDictReflection._flattern(dict(el), self._dumps)
+        if DictReflection._check_nested_type(el):
+            el = DictReflection._flattern(dict(el), self._dumps)
 
         ref = self.obj_ref.copy()
         ref.update({f'{self.key}': el})
@@ -410,7 +482,7 @@ class MongoDequeReflection(MongoDeque):
 
         await self.col.update_one(self.obj_ref, {'$pull': {f'{self.key}': h}})
 
-    async def _mongo_reverse(self):
+    async def _reflection_reverse(self):
 
         pipeline = [{'$match': self.obj_ref},
                     {'$project': {f'{self.key}': {'$reverseArray': f'${self.key}'}}}]
@@ -423,7 +495,7 @@ class MongoDequeReflection(MongoDeque):
 
         return await self.col.update_one(self.obj_ref, {'$set': {f'{self.key}': doc}})
 
-    async def _mongo_rotate(self, num):
+    async def _reflection_rotate(self, num):
         # haven't found any mongo eq. (could be replaced with full reflection update)
         def rotate(a, r=1):
             if len(a) == 0:
@@ -438,18 +510,18 @@ class MongoDequeReflection(MongoDeque):
 
         return await self.col.update_one(self.obj_ref, {'$set': {f'{self.key}': rotate(obj, num)}})
 
-    async def _mongo_setitem(self, ix, el):
+    async def _reflection_setitem(self, ix, el):
         el = el[0]
-        if isinstance(self[ix], MongoDequeReflection) and getattr(el, 'nested_ix', None) == ix:
+        if isinstance(self[ix], DequeReflection) and getattr(el, 'nested_ix', None) == ix:
             return
 
         return await self.col.update_one(self.obj_ref, {'$set': {f'{self.key}.{ix}': el}})
 
-    async def _mongo_delitem(self, ix):
+    async def _reflection_delitem(self, ix):
         h = random.getrandbits(32)
 
         await self.col.update_one(self.obj_ref, {'$set': {f'{self.key}.{ix}': h}})
         return await self.col.update_one(self.obj_ref, {'$pull': {f'{self.key}': h}})
 
 
-from .mongodict import MongoDictReflection
+from .mongodict import MongoDictReflection, DictReflection
