@@ -167,6 +167,7 @@ class DequeReflection(deque, _SyncObjBase):
                 return True
 
     def __getitem__(self, index):
+        self.last_getitem_index = index
         # get slices as flat list
         if isinstance(index, slice):
             start = index.start
@@ -205,7 +206,6 @@ class DequeReflection(deque, _SyncObjBase):
             if start and stop and (start == stop or start > stop):
                 stop = start
                 ins_vs = value[:]
-                value = []
             else:
                 changed_ixs = [i for i in range(*key.indices(len(self)))]
                 from_left = start is None and len(value) > len(changed_ixs)
@@ -230,27 +230,26 @@ class DequeReflection(deque, _SyncObjBase):
 
         self._move_nested_ixs(self)
 
-        if not hasattr(value, '_parent') or self._instance_from_outside(value):
+        for key, value in set_kvs:
+            if self._check_nested_type(value):
+                value = self._run_now(self._proc_pushed(self, [value]))
+            elif DictReflection._check_nested_type(value):
+                nested = self._run_now(self._dict_cls._create_nested(self, key, value))
+                super(DequeReflection, self).__setitem__(key, nested)
+                value = [self._run_now(DictReflection._proc_pushed(nested, dict(value), recursive_call=True))]
+            else:
+                value = [self._dumps(value)]
+            self._enqueue_coro(self._reflection_setitem(key, value), self._tree_depth)
 
-            for key, value in set_kvs:
-                if self._check_nested_type(value):
-                    value = self._run_now(self._proc_pushed(self, [value]))
-                elif DictReflection._check_nested_type(value):
-                    self[key] = self._run_now(self._dict_cls._create_nested(self, key, value))
-                    value = [self._run_now(DictReflection._proc_pushed(self[key], dict(value), recursive_call=True))]
-                else:
-                    value = [self._dumps(value)]
-                self._enqueue_coro(self._reflection_setitem(key, value), self._tree_depth)
+        if ins_vs:
+            if from_left:
+                ins_vs.reverse()
 
-            if ins_vs:
-                if from_left:
-                    ins_vs.reverse()
+            if ins_ix < 0:
+                ins_ix = len(self) + ins_ix - 1
 
-                if ins_ix < 0:
-                    ins_ix = len(self) + ins_ix - 1
-
-                self._run_now(self._proc_pushed(self, ins_vs))
-                self._enqueue_coro(self._reflection_extend(ins_vs, position=ins_ix), self._tree_depth)
+            self._run_now(self._proc_pushed(self, ins_vs))
+            self._enqueue_coro(self._reflection_extend(ins_vs, position=ins_ix), self._tree_depth)
 
     def __delitem__(self,  key):
         super(DequeReflection, self).__delitem__(key)
@@ -341,7 +340,8 @@ class DequeReflection(deque, _SyncObjBase):
                 except ValueError:  # trimmed by maxlen
                     el = await DictReflection._proc_pushed(self, dict(el), recursive_call=True)
                 else:
-                    self[ix] = await self._dict_cls._create_nested(self, ix, el)
+                    nested = await self._dict_cls._create_nested(self, ix, el)
+                    super(DequeReflection, self).__setitem__(ix, nested)
                     el = await DictReflection._proc_pushed(self[ix], dict(el), recursive_call=True)
 
             elif self._check_nested_type(el):
@@ -350,7 +350,8 @@ class DequeReflection(deque, _SyncObjBase):
                 except ValueError:
                     el = await self._proc_pushed(self, list(el))
                 else:
-                    self[ix] = await self._create_nested(self, ix, el)
+                    nested = await self._create_nested(self, ix, el)
+                    super(DequeReflection, self).__setitem__(ix, nested)
                     el = await self._proc_pushed(self[ix], list(el))
 
             else:

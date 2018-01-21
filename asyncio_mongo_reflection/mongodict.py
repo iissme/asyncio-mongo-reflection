@@ -46,16 +46,16 @@ class DictReflection(dict, _SyncObjBase):
     def __setitem__(self, key, value):
         super(DictReflection, self).__setitem__(key, value)
 
-        if not hasattr(value, '_parent') or self._instance_from_outside(value):
-            if self._check_nested_type(value):
-                value = self._run_now(self._proc_pushed(self, {key: value}))
-            elif DequeReflection._check_nested_type(value):
-                self[key] = self._run_now(self._deque_cls._create_nested(self, key, list(value)))
-                value = {f'{self.key}.{key}': self._run_now(DequeReflection._proc_pushed(self[key], value))}
-            else:
-                value = {f'{self.key}.{key}': self._dumps(value)}
+        if self._check_nested_type(value):
+            value = self._run_now(self._proc_pushed(self, {key: value}))
+        elif DequeReflection._check_nested_type(value):
+            nested = self._run_now(self._deque_cls._create_nested(self, key, list(value)))
+            super(DictReflection, self).__setitem__(key, nested)
+            value = {f'{self.key}.{key}': self._run_now(DequeReflection._proc_pushed(nested, value))}
+        else:
+            value = {f'{self.key}.{key}': self._dumps(value)}
 
-            self._enqueue_coro(self._reflection_setitem(value), self._tree_depth)
+        self._enqueue_coro(self._reflection_setitem(value), self._tree_depth)
 
     def __delitem__(self, key):
         self._enqueue_coro(self._reflection_delitem(key), self._tree_depth)
@@ -116,11 +116,13 @@ class DictReflection(dict, _SyncObjBase):
         proc_dict = {}
         for key, val in pdict.items():
             if DequeReflection._check_nested_type(val):
-                self[key] = rec_self = await self._deque_cls._create_nested(self, key, list(val))
-                val = await rec_self._proc_pushed(rec_self, val)
+                nested = await self._deque_cls._create_nested(self, key, list(val))
+                super(DictReflection, self).__setitem__(key, nested)
+                val = await DequeReflection._proc_pushed(nested, val)
             elif self._check_nested_type(val):
-                self[key] = rec_self = await self._create_nested(self, key, dict(val))
-                val = await self._proc_pushed(rec_self, dict(val), recursive_call=True)
+                nested = await self._create_nested(self, key, dict(val))
+                super(DictReflection, self).__setitem__(key, nested)
+                val = await self._proc_pushed(nested, dict(val), recursive_call=True)
             else:
                 val = self._dumps(val)
 

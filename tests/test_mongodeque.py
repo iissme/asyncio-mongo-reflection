@@ -221,6 +221,11 @@ async def test_setitem(_):
     m[0] = m[-1]
     o[0] = o[-1]
 
+    m[-1] = {'a': 1}
+    m[1] = m[-1]
+    o[-1] = {'a': 1}
+    o[1] = o[-1]
+
     await m.mongo_pending.join()
     assert m == o
     await db_compare(m, o)
