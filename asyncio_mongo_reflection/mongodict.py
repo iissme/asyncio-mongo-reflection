@@ -38,10 +38,9 @@ class DictReflection(dict, _SyncObjBase):
 
     @staticmethod
     def _instance_from_outside(v):
-        # dirty, but haven't found another way yet
-        if isinstance(v, DictReflection):
+        if isinstance(v, DictReflection) or isinstance(v, DequeReflection):
             stack = inspect.stack()
-            if stack[2][3] != '_proc_pushed' and stack[2][3] != '_proc_loaded':
+            if stack[2][3] not in ('__setitem__', '_proc_pushed', '_proc_loaded'):
                 return True
 
     def __setitem__(self, key, value):
