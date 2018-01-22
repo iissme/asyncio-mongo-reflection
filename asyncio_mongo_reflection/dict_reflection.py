@@ -36,22 +36,17 @@ class DictReflection(dict, _SyncObjBase):
     async def _reflection_delitem(self):
         raise NotImplementedError
 
-    @staticmethod
-    def _instance_from_outside(v):
-        if isinstance(v, DictReflection) or isinstance(v, DequeReflection):
-            stack = inspect.stack()
-            if stack[2][3] not in ('__setitem__', '_proc_pushed', '_proc_loaded'):
-                return True
-
     def __setitem__(self, key, value):
         super(DictReflection, self).__setitem__(key, value)
 
         if self._check_nested_type(value):
             value = self._run_now(self._proc_pushed(self, {key: value}))
+
         elif DequeReflection._check_nested_type(value):
             nested = self._run_now(self._deque_cls._create_nested(self, key, list(value)))
             super(DictReflection, self).__setitem__(key, nested)
             value = {f'{self.key}.{key}': self._run_now(DequeReflection._proc_pushed(nested, value))}
+
         else:
             value = {f'{self.key}.{key}': self._dumps(value)}
 
@@ -66,16 +61,21 @@ class DictReflection(dict, _SyncObjBase):
         fdumps = lambda arg: dumps(arg) if callable(dumps) else arg
 
         for key, val in dct.items():
+
             if isinstance(val, DictReflection) or isinstance(val, dict):
                 dct[key] = cls._flattern(dict(val), dumps)
+
             elif DequeReflection._check_nested_type(val):
                 dct[key] = DequeReflection._flattern(list(val), dumps)
+
             else:
                 dct[key] = fdumps(val)
+
         return dct
 
     @classmethod
     def _move_nested_ixs(cls, self):
+        # keeps up right keys for nested reflections after deletion/insertion in higher deque
         for key, val in self.items():
             if isinstance(val, DequeReflection) or isinstance(val, DictReflection):
                 exp_key = f'{self.key}.{key}'
@@ -91,19 +91,24 @@ class DictReflection(dict, _SyncObjBase):
 
     @classmethod
     async def _proc_loaded(cls, parent, dct, loads, parent_key=None):
+        # creates nested classes after data is loaded from db
         for key, val in dct.items():
+
             if isinstance(val, dict):
                 set_key = f'{parent_key}.{key}' if parent_key else key
                 val = await cls._proc_loaded(parent, val, loads, set_key)
                 nested_cls = parent.__class__ if isinstance(parent, DictReflection) else parent._dict_cls
                 dct[key] = await nested_cls._create_nested(parent, set_key, val)
+
             elif isinstance(val, list):
                 set_key = f'{parent_key}.{key}' if parent_key else key
                 val = await DequeReflection._proc_loaded(parent, val, loads, set_key)
                 nested_cls = parent.__class__ if isinstance(parent, DequeReflection) else parent._deque_cls
                 dct[key] = await nested_cls._create_nested(parent, set_key, val)
+
             else:
                 dct[key] = loads(val)
+
         return dct
 
     @staticmethod
@@ -112,17 +117,21 @@ class DictReflection(dict, _SyncObjBase):
 
     @staticmethod
     async def _proc_pushed(self, pdict, recursive_call=False):
-
+        # check elements pushed to dict and create nested classes
         proc_dict = {}
+
         for key, val in pdict.items():
+
             if DequeReflection._check_nested_type(val):
                 nested = await self._deque_cls._create_nested(self, key, list(val))
                 super(DictReflection, self).__setitem__(key, nested)
                 val = await DequeReflection._proc_pushed(nested, val)
+
             elif self._check_nested_type(val):
                 nested = await self._create_nested(self, key, dict(val))
                 super(DictReflection, self).__setitem__(key, nested)
                 val = await self._proc_pushed(nested, dict(val), recursive_call=True)
+
             else:
                 val = self._dumps(val)
 
@@ -135,12 +144,14 @@ class DictReflection(dict, _SyncObjBase):
 
     def __getattribute__(self, name):
         def cb(func, deque_method):
+
             def inner(*args, **kwargs):
                 func_res = func(*args, **kwargs)
 
                 if name == 'popitem':
                     args = list()
                     args.append(func_res[0])
+
                 elif name == 'update':
                     args = list(args)
                     upd_dict = args.pop() if len(args) else None
@@ -148,9 +159,10 @@ class DictReflection(dict, _SyncObjBase):
                     args.append(self._run_now(self._proc_pushed(self, merged_dict)))
                     kwargs = {}
 
-                self._enqueue_coro(getattr(self, f'_reflection_{deque_method}')(*args, **kwargs), self._tree_depth)
-                return func_res
+                coro = getattr(self, f'_reflection_{deque_method}')(*args, **kwargs)
+                self._enqueue_coro(coro, self._tree_depth)
 
+                return func_res
             return inner
 
         res = super().__getattribute__(name)
@@ -177,6 +189,7 @@ class MongoDictReflection(DictReflection):
 
         if not hasattr(self, 'col') or not hasattr(self, 'obj_ref') or not hasattr(self, 'key'):
             raise MongoReflectionError('You need to provide "col", "obj_ref" and "key" named arguments!')
+
         elif not isinstance(self.col, AsyncIOMotorCollection):
             raise TypeError('"col" argument must be a AsyncIOMotorCollection instance!')
 
@@ -185,6 +198,7 @@ class MongoDictReflection(DictReflection):
 
     async def _reflection_get(self):
         mongo_dict = await self.col.find_one(self.obj_ref, projection={self.key: 1})
+
         if not mongo_dict:
             mongo_dict = await self.col.find_one_and_update(self.obj_ref, {'$set': {self.key: {}}},
                                                             upsert=True, projection={self.key: 1},
@@ -219,4 +233,4 @@ class MongoDictReflection(DictReflection):
         return await self._reflection_pop(key)
 
 
-from .mongodeque import MongoDequeReflection, DequeReflection
+from .deque_reflection import MongoDequeReflection, DequeReflection

@@ -6,7 +6,7 @@ Reflects python's deque and dict objects in mongodb asynchronously in background
 :license: MIT, see LICENSE for more details.
 """
 import logging
-from .mongodeque import MongoDequeReflection
-from .mongodict import MongoDictReflection
+from .deque_reflection import MongoDequeReflection
+from .dict_reflection import MongoDictReflection
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())

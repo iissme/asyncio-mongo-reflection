@@ -11,6 +11,8 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 
 
+# additional class to support compatibility with older versions.
+# will be deprecated soon.
 class MongoDequeSimple(deque, ABC):  # pragma: no cover
     @classmethod
     async def create(cls, **kwargs):
@@ -159,17 +161,10 @@ class DequeReflection(deque, _SyncObjBase):
     def __rmul__(self, num):
         return self.__mul__(num)
 
-    @staticmethod
-    def _instance_from_outside(v):
-        if isinstance(v, DequeReflection) or isinstance(v, DictReflection):
-            stack = inspect.stack()
-            if stack[2][3] not in ('__setitem__', '_proc_pushed', '_proc_loaded'):
-                return True
-
     def __getitem__(self, index):
-        self.last_getitem_index = index
         # get slices as flat list
         if isinstance(index, slice):
+
             start = index.start
             start = len(self) + start if start and start < 0 else start
 
@@ -178,9 +173,11 @@ class DequeReflection(deque, _SyncObjBase):
 
             step = index.step
             sl_step = -1 * step if step and step < 0 else step
+
             dslice = self._flattern([i for i in islice(self, start, stop, sl_step)], self._dumps)
             if step and step < 0:
                 dslice.reverse()
+
             return dslice
 
         return super(DequeReflection, self).__getitem__(index)
@@ -195,7 +192,9 @@ class DequeReflection(deque, _SyncObjBase):
             key = len(self) + key if key < 0 else key
             set_kvs.append((key, value))
             super(DequeReflection, self).__setitem__(key, value)
+
         else:
+            # slices assigned iterable support
             if self[key] is []:
                 return
 
@@ -203,12 +202,15 @@ class DequeReflection(deque, _SyncObjBase):
             start = key.start
             stop = key.stop
 
+            # pure insertion slice
             if start and stop and (start == stop or start > stop):
                 stop = start
                 ins_vs = value[:]
+            # pure replacement slice or mixed with insertion
             else:
                 changed_ixs = [i for i in range(*key.indices(len(self)))]
                 from_left = start is None and len(value) > len(changed_ixs)
+
                 if from_left:
                     split_at = len(changed_ixs)
                     ins_vs = value[:split_at]
@@ -230,17 +232,22 @@ class DequeReflection(deque, _SyncObjBase):
 
         self._move_nested_ixs(self)
 
+        # separate db operations for replacements
         for key, value in set_kvs:
             if self._check_nested_type(value):
                 value = self._run_now(self._proc_pushed(self, [value]))
+
             elif DictReflection._check_nested_type(value):
                 nested = self._run_now(self._dict_cls._create_nested(self, key, value))
                 super(DequeReflection, self).__setitem__(key, nested)
                 value = [self._run_now(DictReflection._proc_pushed(nested, dict(value), recursive_call=True))]
+
             else:
                 value = [self._dumps(value)]
+
             self._enqueue_coro(self._reflection_setitem(key, value), self._tree_depth)
 
+        # insert with one reflection extend db operation
         if ins_vs:
             if from_left:
                 ins_vs.reverse()
@@ -272,6 +279,7 @@ class DequeReflection(deque, _SyncObjBase):
 
     @classmethod
     def _move_nested_ixs(cls, self):
+        # keeps up right keys for nested reflections after deletion/insertion
         for ix, el in enumerate(self):
             if isinstance(el, DequeReflection) or isinstance(el, DictReflection):
                 exp_key = f'{self.key}.{ix}'
@@ -289,22 +297,28 @@ class DequeReflection(deque, _SyncObjBase):
 
     @classmethod
     async def _proc_loaded(cls, parent, arr, loads, parent_ix=None):
+        # creates nested classes after data is loaded from db
         for ix, el in enumerate(arr):
+
             if isinstance(el, list):
                 set_ix = f'{parent_ix}.{ix}' if parent_ix else ix
                 el = await cls._proc_loaded(parent, el, loads, set_ix)
                 nested_cls = parent.__class__ if isinstance(parent, DequeReflection) else parent._deque_cls
                 arr[ix] = await nested_cls._create_nested(parent, set_ix, el)
+
             elif isinstance(el, dict):
                 set_ix = f'{parent_ix}.{ix}' if parent_ix else ix
                 el = await DictReflection._proc_loaded(parent, el, loads, set_ix)
                 nested_cls = parent.__class__ if isinstance(parent, DictReflection) else parent._dict_cls
                 arr[ix] = await nested_cls._create_nested(parent, set_ix, el)
+
             else:
                 arr[ix] = loads(el)
+
         return arr
 
     def _find_el(self, el):
+        # support same elements in list
         found_mod_at = []
         found_flat_at = []
         for ix, val in enumerate(self):
@@ -328,6 +342,7 @@ class DequeReflection(deque, _SyncObjBase):
 
     @staticmethod
     async def _proc_pushed(self, arg, from_left=False):
+        # check elements pushed to deque and create nested classes
         push_arr = []
 
         if not isinstance(arg, Iterable):
@@ -347,7 +362,7 @@ class DequeReflection(deque, _SyncObjBase):
             elif self._check_nested_type(el):
                 try:
                     ix = self._find_el(el)
-                except ValueError:
+                except ValueError:   # trimmed by maxlen
                     el = await self._proc_pushed(self, list(el))
                 else:
                     nested = await self._create_nested(self, ix, el)
@@ -524,4 +539,4 @@ class MongoDequeReflection(DequeReflection):
         return await self.col.update_one(self.obj_ref, {'$pull': {f'{self.key}': h}})
 
 
-from .mongodict import MongoDictReflection, DictReflection
+from .dict_reflection import MongoDictReflection, DictReflection

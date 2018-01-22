@@ -3,8 +3,8 @@ import motor.motor_asyncio
 import pytest
 from functools import wraps
 
-from asyncio_mongo_reflection.mongodeque import *
-from asyncio_mongo_reflection.mongodict import *
+from asyncio_mongo_reflection.deque_reflection import *
+from asyncio_mongo_reflection.dict_reflection import *
 
 loop = asyncio.get_event_loop_policy().new_event_loop()
 asyncio.set_event_loop(loop)

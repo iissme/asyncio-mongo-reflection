@@ -21,6 +21,7 @@ class SyncCoroExecutor(Executor):
     """
     Allows to wait for a given coroutine execution synchronously from a main thread.
     Replaces loop.run_until_complete.
+    Solves issue "loop.run_until_complete already inside loop.run_until_complete" and some others.
     """
     def __init__(self):
         self._loop = asyncio.new_event_loop()
@@ -56,11 +57,11 @@ class AsyncCoroQueueDispatcher:
 
         __slots__ = ('coro', 'priority', 'locals', '_insertion_clock')
 
-        def __init__(self, coro, priority, locals, clock):
+        def __init__(self, coro, priority, coro_locals, insertion_clock):
             self.coro = coro
             self.priority = priority
-            self.locals = locals
-            self._insertion_clock = clock
+            self.locals = coro_locals
+            self._insertion_clock = insertion_clock
 
         def __lt__(self, other):
             if self == other:
@@ -148,6 +149,7 @@ class AsyncCoroQueueDispatcher:
                                               coro_locals, clock()))
 
 
+# metaclass to support asynchronous __init__ (replaced with __ainit__)
 class AsyncInit(type):
 
     @staticmethod
