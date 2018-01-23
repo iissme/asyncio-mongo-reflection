@@ -43,7 +43,7 @@ class DictReflection(dict, _SyncObjBase):
             value = self._run_now(self._proc_pushed(self, {key: value}))
 
         elif DequeReflection._check_nested_type(value):
-            nested = self._run_now(self._deque_cls._create_nested(self, key, list(value)))
+            nested = self._run_now(self._deque_cls._create_nested(self, key, value))
             super(DictReflection, self).__setitem__(key, nested)
             value = {f'{self.key}.{key}': self._run_now(DequeReflection._proc_pushed(nested, value))}
 
@@ -87,7 +87,7 @@ class DictReflection(dict, _SyncObjBase):
     async def _create_nested(cls, parent, key, val):
         self = cls.__cnew__(cls)
         self.__dict__ = parent.__dict__.copy()
-        return await cls.init(self, val, key=f'{self.key}.{key}', _parent=proxy(parent))
+        return await cls.init(self, dict(val), key=f'{self.key}.{key}', _parent=proxy(parent))
 
     @classmethod
     async def _proc_loaded(cls, parent, dct, loads, parent_key=None):
@@ -123,7 +123,7 @@ class DictReflection(dict, _SyncObjBase):
         for key, val in pdict.items():
 
             if DequeReflection._check_nested_type(val):
-                nested = await self._deque_cls._create_nested(self, key, list(val))
+                nested = await self._deque_cls._create_nested(self, key, val)
                 super(DictReflection, self).__setitem__(key, nested)
                 val = await DequeReflection._proc_pushed(nested, val)
 
