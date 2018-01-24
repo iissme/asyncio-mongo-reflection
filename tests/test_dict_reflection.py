@@ -8,7 +8,8 @@ mongo_dict = lrun_uc(
             'a': 1,
             'b': {'g': {'t': 43}},
             'c': 3,
-            'd': {'e': 4}
+            'd': {'e': 4},
+            'p': deque([1, 2, 3], maxlen=10)
         },
         col=db['test_dict'], obj_ref={'dict_id': 'test_dict'},
         key='test_dict.inner', dumps=None)
