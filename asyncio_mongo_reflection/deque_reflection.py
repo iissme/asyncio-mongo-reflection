@@ -4,6 +4,7 @@ import random
 from abc import ABC, abstractmethod
 from collections import deque, Iterable
 from weakref import proxy
+from hashlib import sha256
 from itertools import zip_longest, islice
 
 from .base import _SyncObjBase, MongoReflectionError
@@ -484,12 +485,15 @@ class MongoDequeReflection(DequeReflection):
         return await self.col.update_one(self.obj_ref, {'$pop': {f'{self.key}': -1}})
 
     async def _reflection_remove(self, el):
-        h = random.getrandbits(32)
+        h = sha256(str(random.getrandbits(256)).encode('utf-8')).hexdigest()
 
         if self._check_nested_type(el):
             el = self._flattern(list(el), self._dumps)
         if DictReflection._check_nested_type(el):
             el = DictReflection._flattern(dict(el), self._dumps)
+
+        if type(el) not in (list, dict):
+            el = self._dumps(el)
 
         ref = self.obj_ref.copy()
         ref.update({f'{self.key}': el})
