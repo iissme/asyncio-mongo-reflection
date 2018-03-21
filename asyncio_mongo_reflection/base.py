@@ -149,9 +149,10 @@ class AsyncCoroQueueDispatcher:
                                               coro_locals, clock()))
 
 
-# metaclass to support asynchronous __init__ (replaced with __ainit__)
 class AsyncInit(type):
-
+    """
+    Metaclass to support asynchronous __init__ (replaced with __ainit__)
+    """
     @staticmethod
     async def init(obj, *args, **kwargs):
         await obj.__ainit__(*args, **kwargs)

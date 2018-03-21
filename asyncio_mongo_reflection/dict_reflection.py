@@ -75,7 +75,9 @@ class DictReflection(dict, _SyncObjBase):
 
     @classmethod
     def _move_nested_ixs(cls, self):
-        # keeps up right keys for nested reflections after deletion/insertion in higher deque
+        """
+        Keeps up right keys for nested reflections after deletion/insertion in higher deque.
+        """
         for key, val in self.items():
             if isinstance(val, DequeReflection) or isinstance(val, DictReflection):
                 exp_key = f'{self.key}.{key}'
@@ -91,7 +93,9 @@ class DictReflection(dict, _SyncObjBase):
 
     @classmethod
     async def _proc_loaded(cls, parent, dct, loads, parent_key=None):
-        # creates nested classes after data is loaded from db
+        """
+        Creates nested classes after data is loaded from db.
+        """
         for key, val in dct.items():
 
             if isinstance(val, dict):
@@ -117,7 +121,9 @@ class DictReflection(dict, _SyncObjBase):
 
     @staticmethod
     async def _proc_pushed(self, pdict, recursive_call=False):
-        # check elements pushed to dict and create nested classes
+        """
+        Check elements pushed to dict and create nested classes.
+        """
         proc_dict = {}
 
         for key, val in pdict.items():

@@ -12,9 +12,11 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 
 
-# additional class to support compatibility with older versions.
-# will be deprecated soon.
 class MongoDequeSimple(deque, ABC):  # pragma: no cover
+    """
+    Additional class to support compatibility with older versions.
+    Will be deprecated soon.
+    """
     @classmethod
     async def create(cls, **kwargs):
         self = cls()
@@ -163,8 +165,7 @@ class DequeReflection(deque, _SyncObjBase):
         return self.__mul__(num)
 
     def __getitem__(self, index):
-        # get slices as flat list
-        if isinstance(index, slice):
+        if isinstance(index, slice):  # get slices as flat list
 
             start = index.start
             start = len(self) + start if start and start < 0 else start
@@ -280,7 +281,9 @@ class DequeReflection(deque, _SyncObjBase):
 
     @classmethod
     def _move_nested_ixs(cls, self):
-        # keeps up right keys for nested reflections after deletion/insertion
+        """
+        Keeps up right keys for nested reflections after deletion/insertion.
+        """
         for ix, el in enumerate(self):
             if isinstance(el, DequeReflection) or isinstance(el, DictReflection):
                 exp_key = f'{self.key}.{ix}'
@@ -298,7 +301,9 @@ class DequeReflection(deque, _SyncObjBase):
 
     @classmethod
     async def _proc_loaded(cls, parent, arr, loads, parent_ix=None):
-        # creates nested classes after data is loaded from db
+        """
+        Creates nested classes after data is loaded from db.
+        """
         for ix, el in enumerate(arr):
 
             if isinstance(el, list):
@@ -319,7 +324,9 @@ class DequeReflection(deque, _SyncObjBase):
         return arr
 
     def _find_el(self, el):
-        # support same elements in list
+        """
+        Support same elements in list
+        """
         found_mod_at = []
         found_flat_at = []
         for ix, val in enumerate(self):
@@ -343,7 +350,9 @@ class DequeReflection(deque, _SyncObjBase):
 
     @staticmethod
     async def _proc_pushed(self, arg, from_left=False):
-        # check elements pushed to deque and create nested classes
+        """
+        Check elements pushed to deque and create nested classes.
+        """
         push_arr = []
 
         if not isinstance(arg, Iterable):
