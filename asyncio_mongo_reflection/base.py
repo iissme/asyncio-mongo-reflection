@@ -99,7 +99,7 @@ class AsyncCoroQueueDispatcher:
     async def create(self):
         try:
             self._dispatcher_task = self.loop.create_task(self._queue_consumer())
-            await asyncio.Future()
+            await asyncio.Future(loop=self.loop)
         except asyncio.CancelledError:
             # waits for remaining tasks when dispatcher's task is cancelled
             await self.tasks_queue.join()
@@ -141,7 +141,7 @@ class AsyncCoroQueueDispatcher:
                 else:
                     raise e
 
-        f = asyncio.Future()
+        f = asyncio.Future(loop=self.loop)
         f.add_done_callback(task_cb)
 
         coro_locals = {key: repr(val) for key, val in coro.cr_frame.f_locals.items()}
