@@ -27,7 +27,7 @@ class SyncCoroExecutor(Executor):
         self._loop = asyncio.new_event_loop()
         self._thread = Thread(daemon=True,
                               target=self._start_shadow_loop,
-                              name='sync corutine executor')
+                              name='sync coroutine executor')
         self._thread.start()
 
     def _start_shadow_loop(self):
