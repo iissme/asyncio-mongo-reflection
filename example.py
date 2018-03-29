@@ -1,6 +1,6 @@
 import asyncio
 from motor import motor_asyncio
-from mongodeque import MongoDequeReflection
+from mongodeque import MongoDequeReflection, MongoDictReflection
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -18,6 +18,10 @@ async def create_reflection():
     return await MongoDequeReflection([1, 2, [6, 7, 8]], col=db['example_reflection'],
                                       obj_ref={'array_id': 'example'}, key='inner.arr',
                                       rewrite=False)
+
+# MongoDictReflection is similar to MongoDequeReflection but wraps python's dict.
+# Note that you can create dicts inside MongoDequeReflection and lists inside MongoDictReflection
+# All actions above that dicts and lists are reflected too.
 
 mongo_reflection = loop.run_until_complete(create_reflection())
 

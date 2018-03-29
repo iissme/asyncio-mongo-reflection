@@ -4,7 +4,8 @@
 
 Python 3.6+
 
-asyncio-mongo-reflection writes each separate change of python's deque(list), dict or any their nested combination to [mongodb][mongodb_link] asynchronously in background using asyncio and [motor][motor_link] mongodb driver.
+asyncio-mongo-reflection is an ORM like library. It provides reflections that write each separate change of wrapped python's list/deque, dict or any their nested combination to [mongodb][mongodb_link] objects asynchronously in background using asyncio and [motor][motor_link] mongodb driver.
+
 
 ## About
 * Reflections support nesting (i.e. dicts inside dicts or deques inside deques). Mixed nesting is supported too (dicts inside deques for ex.)!
@@ -24,7 +25,7 @@ Look at example below.
 ```python
 import asyncio
 from motor import motor_asyncio
-from mongodeque import MongoDequeReflection
+from mongodeque import MongoDequeReflection, MongoDictReflection
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -39,9 +40,13 @@ db = client.test_db
 async def create_reflection():
     # first arg is optional, without it empty reflection will be created
     # or list will be loaded from mongo (if any found using provided obj_ref/key)
-    return await MongoDequeReflection.([1, 2, [6, 7, 8]], col=db['example_reflection'],
-                                        obj_ref={'array_id': 'example'}, key='inner.arr',
-                                        rewrite=False)
+    return await MongoDequeReflection([1, 2, [6, 7, 8]], col=db['example_reflection'],
+                                      obj_ref={'array_id': 'example'}, key='inner.arr',
+                                      rewrite=False)
+
+# MongoDictReflection is similar to MongoDequeReflection but wraps python's dict.
+# Note that you can create dicts inside MongoDequeReflection and lists inside MongoDictReflection
+# All actions above that dicts and lists are reflected too.
 
 mongo_reflection = loop.run_until_complete(create_reflection())
 
@@ -75,8 +80,8 @@ import motor.motor_asyncio
 client = motor.motor_asyncio.AsyncIOMotorClient()
 db = client.test_db
 ref = await MongoDequeReflection(col=db['example_reflection'],
-                                 obj_ref={'array_id': 'interacive_example'},
-                                 key='inner.arr', maxlen=10)
+                                obj_ref={'array_id': 'interacive_example'},
+                                key='inner.arr', maxlen=10)
 
 # empty reflection is created
 # now you can try to modify ref and trace changes in any mongodb client
