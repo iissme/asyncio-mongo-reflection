@@ -46,7 +46,7 @@ async def create_reflection():
 
 # MongoDictReflection is similar to MongoDequeReflection but wraps python's dict.
 # Note that you can create dicts inside MongoDequeReflection and lists inside MongoDictReflection
-# All actions above that dicts and lists are reflected too.
+# All actions on that dicts and lists are reflected too.
 
 mongo_reflection = loop.run_until_complete(create_reflection())
 
