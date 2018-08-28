@@ -14,8 +14,7 @@ from pymongo import ReturnDocument
 
 class MongoDequeSimple(deque, ABC):  # pragma: no cover
     """
-    Additional class to support compatibility with older versions.
-    Will be deprecated soon.
+    Deprecated. Additional class to support compatibility with older versions.
     """
     @classmethod
     async def create(cls, **kwargs):

@@ -46,8 +46,8 @@ class SyncCoroExecutor(Executor):
 class AsyncCoroQueueDispatcher:
     """
     Dispatcher gets coroutine from its iternal queue,
-    runs is asynchronously (in background) and waits untill it's done,
-    then gets next one. It's meant to be embed in another class.
+    runs is asynchronously and waits untill it's done,
+    then gets next one. It's meant to be embedded in another class.
 
     'Create' method should be run via asyncio.ensure_future or loop.create_task.
     """
