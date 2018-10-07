@@ -151,39 +151,38 @@ class AsyncCoroQueueDispatcher:
 
 class AsyncInit(type):
     """
-    Metaclass to support asynchronous __init__ (replaced with __ainit__)
+    Metaclass for asynchronous __init__ support (replaced with __ainit__)
     """
     @staticmethod
     async def init(obj, *args, **kwargs):
         await obj.__ainit__(*args, **kwargs)
         return obj
 
-    @classmethod
-    def new(mcs, cls, *args, **kwargs):
-        obj = cls.__cnew__(cls)
-        coro = mcs.init(obj, *args, **kwargs)
-        return coro
-
     def __new__(mcs, name, bases, attrs, **kwargs):
-
         if '__new__' in attrs:
-            attrs['__cnew__'] = attrs['__new__']
-        elif len(bases):
-            if hasattr(bases[0], '__cnew__'):
-                attrs['__cnew__'] = bases[0].__cnew__
+            attrs['__class_new__'] = attrs['__new__']
+
+        def __new__(cls):
+            host_cls = __new__._cls
+            if hasattr(host_cls, '__class_new__'):
+                obj = host_cls.__class_new__(cls)
             else:
-                attrs['__cnew__'] = bases[0].__new__
-        else:
-            attrs['__cnew__'] = object.__new__
+                obj = super(host_cls, cls).__new__(cls)
+            if not hasattr(obj, 'coro') and hasattr(obj, '__ainit__'):
+                obj.coro = mcs.init
+            return obj
 
-        attrs['__new__'] = mcs.new
-        return super().__new__(mcs, name, bases, attrs)
+        attrs['__new__'] = __new__
+        _cls = super().__new__(mcs, name, bases, attrs)
+        __new__._cls = _cls
+        return _cls
 
-    def __init__(cls, name, bases, attrs, **kwargs):
+    def __init__(cls, name, bases, attrs):
         super().__init__(name, bases, attrs)
 
     def __call__(cls, *args, **kwargs):
-        return super().__call__(*args, **kwargs)
+        obj = super().__call__()
+        return obj.coro(obj, *args, **kwargs)
 
 
 class ABCAsyncInit(AsyncInit, ABCMeta):

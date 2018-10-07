@@ -292,7 +292,7 @@ class DequeReflection(deque, _SyncObjBase):
 
     @classmethod
     async def _create_nested(cls, parent, ix, val):
-        self = cls.__cnew__(cls)
+        self = cls.__new__(cls)
         self.__dict__ = parent.__dict__.copy()
         maxlen = getattr(val, 'maxlen', getattr(parent, 'maxlen', None))
         return await cls.init(self, list(val), key=f'{self.key}.{ix}',

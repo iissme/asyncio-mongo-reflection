@@ -87,7 +87,7 @@ class DictReflection(dict, _SyncObjBase):
 
     @classmethod
     async def _create_nested(cls, parent, key, val):
-        self = cls.__cnew__(cls)
+        self = cls.__new__(cls)
         self.__dict__ = parent.__dict__.copy()
         return await cls.init(self, dict(val), key=f'{self.key}.{key}', _parent=proxy(parent))
 
