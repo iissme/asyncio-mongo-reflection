@@ -395,12 +395,12 @@ class DequeReflection(deque, _SyncObjBase):
 
                 if name in {'append', 'appendleft', 'extend', 'extendleft', 'insert'}:
                     args = list(args)
-                    p_ix = 0 if name is not 'insert' else 1
+                    p_ix = 0 if name != 'insert' else 1
                     if name in {'append', 'appendleft', 'insert'}:
                         args[p_ix] = [args[p_ix]]
 
                     args[p_ix] = self._run_now(self._proc_pushed(
-                        self, args[p_ix], from_left=True if name is 'extendleft' else False))
+                        self, args[p_ix], from_left=True if name != 'extendleft' else False))
 
                 self._enqueue_coro(getattr(self, f'_reflection_{deque_method}')(*args), self._tree_depth)
                 self._move_nested_ixs(self)
