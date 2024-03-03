@@ -2,7 +2,13 @@ import asyncio
 import inspect
 import random
 from abc import ABC, abstractmethod
-from collections import deque, Iterable
+
+try:
+    from collections import deque, Iterable
+except ImportError:
+    from collections import deque
+    from collections.abc import Iterable
+    
 from weakref import proxy
 from hashlib import sha256
 from itertools import zip_longest, islice
