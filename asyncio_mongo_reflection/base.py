@@ -4,7 +4,7 @@ import functools
 import logging
 from threading import Thread
 from concurrent.futures import Executor
-from time import clock
+from time import perf_counter
 from abc import ABCMeta
 
 from pymongo.collection import UpdateResult
@@ -146,7 +146,7 @@ class AsyncCoroQueueDispatcher:
 
         coro_locals = {key: repr(val) for key, val in coro.cr_frame.f_locals.items()}
         self.tasks_queue.put_nowait(self.Task(future_wrapper(coro, f), priority,
-                                              coro_locals, clock()))
+                                              coro_locals, perf_counter()))
 
 
 class AsyncInit(type):
